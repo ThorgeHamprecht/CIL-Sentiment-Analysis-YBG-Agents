@@ -185,6 +185,8 @@ def main(args):
     out_dir.mkdir(parents=True, exist_ok=True)
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print(f"Device: {device}")
+    if args.require_cuda and device.type != "cuda":
+        raise RuntimeError("CUDA is required for mDeBERTa training; refusing to run on CPU.")
     if args.no_retrieval_eval and args.checkpoint_metric != "supcon_val_loss":
         raise ValueError("--checkpoint_metric must be supcon_val_loss when --no_retrieval_eval is used")
 
@@ -393,6 +395,7 @@ if __name__ == "__main__":
     parser.add_argument("--similarity_chunk_size", type=int, default=512)
     parser.add_argument("--checkpoint_metric", type=str, default="knn_k7_weighted_median_score")
     parser.add_argument("--no_retrieval_eval", action="store_true")
+    parser.add_argument("--require_cuda", action=argparse.BooleanOptionalAction, default=True)
     parser.add_argument("--no_progress", action="store_true")
     parser.add_argument("--gradient_checkpointing", action="store_true")
     parser.add_argument("--data_dir",         default=str(_DEFAULT_DATA_DIR))
