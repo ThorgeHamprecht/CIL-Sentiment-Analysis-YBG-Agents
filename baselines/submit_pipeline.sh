@@ -1,7 +1,7 @@
 #!/bin/bash
 # Submit the full distillation pipeline with automatic SLURM dependency chaining.
 # Run this once on the cluster login node:
-#   bash /home/thamprecht/cil/project/baselines/submit_pipeline.sh
+#   bash /home/$USER/CIL-Sentiment-Analysis-YBG-Agents/baselines/submit_pipeline.sh
 #
 # Execution order (only 1 job runs at a time per account):
 #   [10 BiLSTM ordinal] ─┐
@@ -10,7 +10,7 @@
 #       └─> [11 soft label generation]
 #               └─> [12 distilled BiLSTM]
 
-BASE=/home/thamprecht/cil/project/baselines
+BASE=/home/$USER/CIL-Sentiment-Analysis-YBG-Agents/baselines
 
 # Step 1 and Teacher training — independent, queue together
 JOB10=$(sbatch --parsable "${BASE}/10_bilstm_ordinal/submit.sh")
@@ -33,8 +33,8 @@ else
 fi
 
 echo ""
-echo "Monitor: squeue -u thamprecht -o '%i %j %T %M %l %R'"
+echo "Monitor: squeue -u $USER -o '%i %j %T %M %l %R'"
 echo ""
 echo "Fetch submissions when done:"
-echo "  rsync -av thamprecht@student-cluster.inf.ethz.ch:/work/scratch/thamprecht/cil/submissions/ \\"
+echo "  rsync -av roliveir@student-cluster.inf.ethz.ch:/work/scratch/$USER/cil/submissions/ \\"
 echo "    \"/Users/thorge/Documents/ETH/MS Semester 2/CIL/CIL Sentiment Analysis/submissions/\""

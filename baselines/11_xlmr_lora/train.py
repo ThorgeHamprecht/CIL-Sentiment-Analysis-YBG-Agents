@@ -18,6 +18,7 @@ ROOT = Path(__file__).resolve().parents[2]
 _DEFAULT_DATA_DIR = ROOT / "data"
 _DEFAULT_ARTIFACT_DIR = Path(__file__).parent / "artifacts"
 MODEL_NAME = "xlm-roberta-base"
+SCRATCH = Path("/work/scratch") / os.environ.get("USER", "roliveir") / "cil"
 
 
 def kaggle_score(preds, labels):
@@ -65,7 +66,7 @@ def main(args):
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print(f"Device: {device}")
 
-    os.environ.setdefault("HF_HOME", "/work/scratch/thamprecht/cil/.cache/huggingface")
+    os.environ.setdefault("HF_HOME", str(SCRATCH / ".cache/huggingface"))
     tokenizer = AutoTokenizer.from_pretrained(MODEL_NAME)
 
     texts, labels, _ = read_csv(Path(args.data_dir) / "train.csv")

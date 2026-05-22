@@ -2,8 +2,8 @@
 # Run ONCE on the ETH student cluster LOGIN NODE (not as a SLURM job).
 #
 # Usage:
-#   ssh thamprecht@student-cluster.inf.ethz.ch
-#   cd /home/$USER/cil/project
+#   ssh roliveir@student-cluster.inf.ethz.ch
+#   cd /home/$USER/CIL-Sentiment-Analysis-YBG-Agents
 #   bash scripts/setup_cluster_env.sh
 
 set -e
@@ -67,6 +67,6 @@ echo "Venv:  $VENV"
 echo "CUDA shows False on login node (no GPU) — normal."
 python -c "import torch; print('PyTorch:', torch.__version__)"
 echo ""
-echo "Next — copy Kaggle data to scratch (run on your Mac):"
-echo "  rsync -av /path/to/train.csv /path/to/test.csv /path/to/test_solved.csv \\"
-echo "    thamprecht@student-cluster.inf.ethz.ch:$SCRATCH/data/"
+echo "Next — copy Kaggle data to scratch (run locally):"
+echo "  rsync -av /path/to/data/ \\"
+echo "    roliveir@student-cluster.inf.ethz.ch:$SCRATCH/data/"
