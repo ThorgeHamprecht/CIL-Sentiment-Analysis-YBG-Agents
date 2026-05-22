@@ -154,6 +154,7 @@ def evaluate(model, loader, loss_fn, device):
 
 @torch.no_grad()
 def evaluate_retrieval_subset(model, train_loader, val_loader, device, args):
+    """Compute lightweight retrieval metrics from the fixed training subset."""
     z_train, y_train = encode_embeddings(model, train_loader, device)
     z_val, y_val = encode_embeddings(model, val_loader, device)
     return evaluate_retrieval_from_embeddings(
@@ -169,6 +170,7 @@ def evaluate_retrieval_subset(model, train_loader, val_loader, device, args):
 
 
 def _metric_value(checkpoint_metric, val_loss, retrieval_scores):
+    """Convert the configured checkpoint metric into a value to maximize."""
     if checkpoint_metric == "supcon_val_loss":
         return -float(val_loss)
     return float(retrieval_scores[checkpoint_metric])

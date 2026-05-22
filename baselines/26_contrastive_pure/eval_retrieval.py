@@ -27,15 +27,29 @@ DEFAULT_K_VALUES = (1, 7, 101)
 
 
 def kaggle_score(preds: np.ndarray, labels: np.ndarray) -> float:
+    """Return the competition ordinal score from integer predictions.
+
+    The score is 1 - MAE / 4 for labels on the 0..4 ordinal scale.
+    """
     return 1.0 - np.abs(preds - labels).mean() / 4.0
 
 
 def median_decode_probs(probs: torch.Tensor) -> torch.Tensor:
+    """Decode class probabilities by the ordinal median/CDF rule.
+
+    This chooses the first class whose cumulative probability reaches 0.5,
+    matching the repo's median decode used for ordinal/MAE-style evaluation.
+    """
     cdf = torch.cumsum(probs, dim=1)
     return (cdf < 0.5).sum(dim=1).clamp(0, probs.shape[1] - 1).long()
 
 
 def metrics_for_predictions(preds: np.ndarray, labels: np.ndarray) -> Dict[str, object]:
+    """Compute common validation metrics for one prediction vector.
+
+    Returns the repo score, accuracy, macro-F1, MAE, quadratic weighted kappa,
+    and a 5x5 confusion matrix using the repo-native 0..4 labels.
+    """
     cm = confusion_matrix(labels, preds, labels=list(range(NUM_CLASSES)))
     return {
         "score": float(kaggle_score(preds, labels)),
@@ -48,6 +62,11 @@ def metrics_for_predictions(preds: np.ndarray, labels: np.ndarray) -> Dict[str, 
 
 
 def _json_default(obj):
+    """JSON fallback for numpy values used in metric payloads.
+
+    This keeps saved analysis files readable without manually converting every
+    numpy scalar or array before calling json.dump.
+    """
     if isinstance(obj, np.ndarray):
         return obj.tolist()
     if isinstance(obj, (np.integer, np.floating)):
@@ -56,6 +75,11 @@ def _json_default(obj):
 
 
 def sample_per_class_indices(labels: Sequence[int], max_per_class: Optional[int], seed: int) -> List[int]:
+    """Select up to max_per_class examples per label with a deterministic RNG.
+
+    Used for cheap epoch-level retrieval validation. Passing 0 or None returns
+    the full training split, which is useful for final post-training eval.
+    """
     labels_arr = np.asarray(labels)
     if max_per_class is None or max_per_class <= 0:
         return list(range(len(labels_arr)))
@@ -73,6 +97,11 @@ def sample_per_class_indices(labels: Sequence[int], max_per_class: Optional[int]
 
 @torch.no_grad()
 def encode_embeddings(model, loader, device) -> Tuple[torch.Tensor, torch.Tensor]:
+    """Run the contrastive encoder over a loader.
+
+    Returns L2-normalized embeddings on CPU together with labels, so downstream
+    kNN and medoid evaluation can run without another model forward pass.
+    """
     model.eval()
     all_embeddings: List[torch.Tensor] = []
     all_labels: List[torch.Tensor] = []
@@ -101,6 +130,12 @@ def knn_predict_all(
     chunk_size: int = 512,
     device: Optional[torch.device] = None,
 ) -> Dict[str, np.ndarray]:
+    """Predict labels with all requested kNN decoders.
+
+    For each k, this computes majority vote plus a similarity-weighted class
+    distribution over neighbors. The weighted distribution is decoded both by
+    argmax and by the ordinal median/CDF rule.
+    """
     device = device or torch.device("cuda" if torch.cuda.is_available() else "cpu")
     z_train = F.normalize(z_train.float(), p=2, dim=-1).to(device)
     y_train = y_train.long().to(device)
@@ -137,6 +172,11 @@ def knn_predict_all(
 
 
 def compute_class_medoids(z_train: torch.Tensor, y_train: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
+    """Pick one actual training embedding per class as the class medoid.
+
+    For each class, first compute the normalized class centroid, then choose
+    the training embedding with highest cosine similarity to that centroid.
+    """
     medoids: List[torch.Tensor] = []
     labels: List[int] = []
     z_train = F.normalize(z_train.float(), p=2, dim=-1)
@@ -160,6 +200,13 @@ def medoid_predict_all(
     tau: float = 0.07,
     device: Optional[torch.device] = None,
 ) -> Dict[str, np.ndarray]:
+    """Predict labels from class medoids.
+
+    The nearest-medoid decoder chooses the class of the closest medoid. The
+    distribution decoders apply softmax(similarity / tau) across the class
+    medoids, treating those normalized similarities as a 5-class probability
+    distribution, then decode it with argmax or ordinal median/CDF.
+    """
     device = device or torch.device("cuda" if torch.cuda.is_available() else "cpu")
     medoids, medoid_labels = compute_class_medoids(z_train, y_train)
     medoids = medoids.to(device)
@@ -197,6 +244,11 @@ def evaluate_retrieval_from_embeddings(
     chunk_size: int = 512,
     device: Optional[torch.device] = None,
 ) -> Dict[str, Dict[str, object]]:
+    """Run every retrieval evaluator and attach metrics to each method.
+
+    This is the shared entry point used both during lightweight epoch eval and
+    by the full checkpoint evaluation CLI.
+    """
     labels_np = y_val.cpu().numpy()
     predictions = {}
     predictions.update(knn_predict_all(z_train, y_train, z_val, k_values, tau, chunk_size, device))
@@ -205,10 +257,19 @@ def evaluate_retrieval_from_embeddings(
 
 
 def flatten_scores(metrics: Dict[str, Dict[str, object]]) -> Dict[str, float]:
+    """Extract only score values for compact logging and checkpoint selection.
+
+    The resulting keys are named like knn_k7_weighted_median_score.
+    """
     return {f"{name}_score": float(values["score"]) for name, values in metrics.items()}
 
 
 def write_confusion_csvs(metrics: Dict[str, Dict[str, object]], out_dir: Path) -> None:
+    """Write one confusion-matrix CSV per retrieval prediction method.
+
+    These CSVs mirror the JSON confusion matrices but are easier to inspect in
+    spreadsheet tools or paste into reports.
+    """
     classes = list(range(NUM_CLASSES))
     for name, values in metrics.items():
         cm = np.array(values["confusion_matrix"])
@@ -216,6 +277,11 @@ def write_confusion_csvs(metrics: Dict[str, Dict[str, object]], out_dir: Path) -
 
 
 def load_model_from_checkpoint(artifact_dir: Path, device: torch.device) -> Tuple[PureContrastiveMDeBERTa, dict]:
+    """Recreate the contrastive model from best_model.pt.
+
+    Uses the saved projection dimension, dropout, and backbone path when
+    available, then loads the checkpoint weights and returns saved args.
+    """
     ckpt_path = artifact_dir / "best_model.pt"
     ckpt = torch.load(ckpt_path, map_location=device, weights_only=False)
     args = ckpt.get("args", {})
@@ -229,6 +295,11 @@ def load_model_from_checkpoint(artifact_dir: Path, device: torch.device) -> Tupl
 
 
 def build_split_datasets(data_dir: Path, artifact_dir: Path, split_seed: int, max_len: int, tokenize_batch_size: int):
+    """Rebuild the fixed train/validation split and tokenized datasets.
+
+    The split must match training so retrieval eval compares validation points
+    against exactly the training pool seen by the contrastive model.
+    """
     tokenizer = AutoTokenizer.from_pretrained(str(artifact_dir / "tokenizer"), use_fast=False)
     texts, labels, _ = read_csv(data_dir / "train.csv")
     sss = StratifiedShuffleSplit(n_splits=1, test_size=0.1, random_state=split_seed)
@@ -244,6 +315,12 @@ def build_split_datasets(data_dir: Path, artifact_dir: Path, split_seed: int, ma
 
 
 def main(args):
+    """CLI entry point for full checkpoint retrieval evaluation.
+
+    Loads a saved checkpoint, recomputes train/validation embeddings, caches
+    them if requested, evaluates all retrieval decoders, and writes analysis
+    JSON plus confusion-matrix CSVs.
+    """
     data_dir = Path(args.data_dir)
     artifact_dir = Path(args.artifact_dir)
     analysis_dir = artifact_dir / "analysis"
@@ -317,7 +394,7 @@ if __name__ == "__main__":
     parser.add_argument("--data_dir", default=str(_DEFAULT_DATA_DIR))
     parser.add_argument("--split_seed", type=int, default=None)
     parser.add_argument("--max_len", type=int, default=None)
-    parser.add_argument("--batch_size", type=int, default=64)
+    parser.add_argument("--batch_size", type=int, default=32)
     parser.add_argument("--tokenize_batch_size", type=int, default=1024)
     parser.add_argument("--retrieval_tau", type=float, default=0.07)
     parser.add_argument("--k_values", type=int, nargs="+", default=list(DEFAULT_K_VALUES))
