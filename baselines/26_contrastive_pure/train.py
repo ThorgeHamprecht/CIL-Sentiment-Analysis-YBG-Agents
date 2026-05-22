@@ -1,5 +1,6 @@
 """Train mDeBERTa-v3-base with pure supervised contrastive learning."""
 import argparse
+import json
 import math
 import os
 import time
@@ -9,10 +10,17 @@ from pathlib import Path
 import numpy as np
 import torch
 from sklearn.model_selection import StratifiedShuffleSplit
-from torch.utils.data import DataLoader
+from torch.utils.data import DataLoader, Subset
 from transformers import AutoTokenizer, get_cosine_schedule_with_warmup
 
 from dataset import ReviewDataset, read_csv
+from eval_retrieval import (
+    DEFAULT_K_VALUES,
+    encode_embeddings,
+    evaluate_retrieval_from_embeddings,
+    flatten_scores,
+    sample_per_class_indices,
+)
 from model import EMA, PureContrastiveMDeBERTa, SupervisedContrastiveLoss
 
 try:
@@ -144,6 +152,28 @@ def evaluate(model, loader, loss_fn, device):
     return total_loss / len(loader.dataset)
 
 
+@torch.no_grad()
+def evaluate_retrieval_subset(model, train_loader, val_loader, device, args):
+    z_train, y_train = encode_embeddings(model, train_loader, device)
+    z_val, y_val = encode_embeddings(model, val_loader, device)
+    return evaluate_retrieval_from_embeddings(
+        z_train=z_train,
+        y_train=y_train,
+        z_val=z_val,
+        y_val=y_val,
+        k_values=args.retrieval_k_values,
+        tau=args.retrieval_tau,
+        chunk_size=args.similarity_chunk_size,
+        device=device,
+    )
+
+
+def _metric_value(checkpoint_metric, val_loss, retrieval_scores):
+    if checkpoint_metric == "supcon_val_loss":
+        return -float(val_loss)
+    return float(retrieval_scores[checkpoint_metric])
+
+
 def main(args):
     torch.manual_seed(args.seed)
     np.random.seed(args.seed)
@@ -153,6 +183,8 @@ def main(args):
     out_dir.mkdir(parents=True, exist_ok=True)
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print(f"Device: {device}")
+    if args.no_retrieval_eval and args.checkpoint_metric != "supcon_val_loss":
+        raise ValueError("--checkpoint_metric must be supcon_val_loss when --no_retrieval_eval is used")
 
     os.environ.setdefault("TOKENIZERS_PARALLELISM", "false")
     tokenizer = AutoTokenizer.from_pretrained(BACKBONE, use_fast=False)
@@ -160,7 +192,7 @@ def main(args):
     texts, labels, _ = read_csv(data_dir / "train.csv")
     print(f"Loaded {len(texts):,} examples")
 
-    sss = StratifiedShuffleSplit(n_splits=1, test_size=0.1, random_state=args.seed)
+    sss = StratifiedShuffleSplit(n_splits=1, test_size=0.1, random_state=args.split_seed)
     train_idx, val_idx = next(sss.split(texts, labels))
     train_texts = [texts[i] for i in train_idx]
     train_labels = [labels[i] for i in train_idx]
@@ -188,6 +220,25 @@ def main(args):
         val_dataset, batch_size=args.batch_size * 2,
         shuffle=False, num_workers=2, pin_memory=True,
     )
+    retrieval_train_loader = None
+    if not args.no_retrieval_eval:
+        selected_train = sample_per_class_indices(
+            train_labels,
+            max_per_class=args.retrieval_train_per_class,
+            seed=args.split_seed,
+        )
+        retrieval_train_dataset = Subset(train_dataset, selected_train)
+        retrieval_train_loader = DataLoader(
+            retrieval_train_dataset,
+            batch_size=args.retrieval_batch_size,
+            shuffle=False,
+            num_workers=2,
+            pin_memory=True,
+        )
+        print(
+            f"Epoch retrieval eval: {len(retrieval_train_dataset):,} train examples "
+            f"({args.retrieval_train_per_class}/class cap), {len(val_dataset):,} val examples"
+        )
 
     model = PureContrastiveMDeBERTa(
         model_name=BACKBONE,
@@ -219,7 +270,13 @@ def main(args):
         variant=args.supcon_variant,
     )
 
-    best_loss = float("inf")
+    analysis_dir = out_dir / "analysis"
+    analysis_dir.mkdir(parents=True, exist_ok=True)
+    epoch_metrics_path = analysis_dir / "epoch_retrieval_metrics.jsonl"
+    if epoch_metrics_path.exists():
+        epoch_metrics_path.unlink()
+
+    best_metric_value = -float("inf")
     patience_counter = 0
     checkpoint_path = out_dir / "best_model.pt"
 
@@ -241,15 +298,47 @@ def main(args):
 
         ema.apply_shadow()
         val_loss = evaluate(model, val_loader, loss_fn, device)
+        retrieval_scores = {}
+        retrieval_metrics = {}
+        if retrieval_train_loader is not None:
+            retrieval_metrics = evaluate_retrieval_subset(
+                model,
+                retrieval_train_loader,
+                val_loader,
+                device,
+                args,
+            )
+            retrieval_scores = flatten_scores(retrieval_metrics)
         ema.restore()
 
         print(
             f"Epoch {epoch:2d} | train_loss={train_loss:.4f} | val_loss={val_loss:.4f} "
             f"| supcon_variant={args.supcon_variant} | temp={args.temperature} | {time.time()-t0:.1f}s"
         )
+        if retrieval_scores:
+            key_scores = [
+                "knn_k1_weighted_median_score",
+                "knn_k7_weighted_median_score",
+                "knn_k101_weighted_median_score",
+                "medoid_distribution_median_score",
+            ]
+            print("  retrieval " + " | ".join(
+                f"{name.replace('_score', '')}={retrieval_scores[name]:.4f}"
+                for name in key_scores
+                if name in retrieval_scores
+            ))
+            with open(epoch_metrics_path, "a", encoding="utf-8") as f:
+                f.write(json.dumps({
+                    "epoch": epoch,
+                    "train_loss": train_loss,
+                    "supcon_val_loss": val_loss,
+                    "retrieval_scores": retrieval_scores,
+                    "retrieval_metrics": retrieval_metrics,
+                }) + "\n")
 
-        if val_loss < best_loss:
-            best_loss = val_loss
+        metric_value = _metric_value(args.checkpoint_metric, val_loss, retrieval_scores)
+        if metric_value > best_metric_value:
+            best_metric_value = metric_value
             patience_counter = 0
             ema.apply_shadow()
             torch.save(
@@ -257,24 +346,29 @@ def main(args):
                     "model": model.state_dict(),
                     "args": vars(args),
                     "backbone_dir": BACKBONE,
+                    "best_checkpoint_metric": args.checkpoint_metric,
+                    "best_checkpoint_metric_value": metric_value,
                 },
                 checkpoint_path,
             )
             ema.restore()
-            print(f"  -> New best: {best_loss:.4f} (saved)")
+            display_value = -metric_value if args.checkpoint_metric == "supcon_val_loss" else metric_value
+            print(f"  -> New best {args.checkpoint_metric}: {display_value:.4f} (saved)")
         else:
             patience_counter += 1
             if patience_counter >= args.patience:
                 print(f"Early stopping at epoch {epoch} (patience={args.patience})")
                 break
 
-    print(f"\nBest val loss: {best_loss:.4f}")
+    best_display = -best_metric_value if args.checkpoint_metric == "supcon_val_loss" else best_metric_value
+    print(f"\nBest {args.checkpoint_metric}: {best_display:.4f}")
     print(f"Checkpoint: {checkpoint_path}")
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--seed",             type=int,   default=42)
+    parser.add_argument("--split_seed",       type=int,   default=42)
     parser.add_argument("--max_len",          type=int,   default=256)
     parser.add_argument("--batch_size",       type=int,   default=32)
     parser.add_argument("--encoder_lr",       type=float, default=8e-6)
@@ -290,6 +384,13 @@ if __name__ == "__main__":
     parser.add_argument("--ema_decay",        type=float, default=0.999)
     parser.add_argument("--grad_accum_steps", type=int,   default=1)
     parser.add_argument("--tokenize_batch_size", type=int, default=1024)
+    parser.add_argument("--retrieval_train_per_class", type=int, default=1000)
+    parser.add_argument("--retrieval_batch_size", type=int, default=64)
+    parser.add_argument("--retrieval_tau", type=float, default=0.07)
+    parser.add_argument("--retrieval_k_values", type=int, nargs="+", default=list(DEFAULT_K_VALUES))
+    parser.add_argument("--similarity_chunk_size", type=int, default=512)
+    parser.add_argument("--checkpoint_metric", type=str, default="knn_k7_weighted_median_score")
+    parser.add_argument("--no_retrieval_eval", action="store_true")
     parser.add_argument("--no_progress", action="store_true")
     parser.add_argument("--gradient_checkpointing", action="store_true")
     parser.add_argument("--data_dir",         default=str(_DEFAULT_DATA_DIR))

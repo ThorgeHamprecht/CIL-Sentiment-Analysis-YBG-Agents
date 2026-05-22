@@ -2,7 +2,7 @@
 #SBATCH --job-name=contrastive_pure
 #SBATCH --output=/work/scratch/%u/cil/logs/contrastive_pure-%j.out
 #SBATCH --error=/work/scratch/%u/cil/logs/contrastive_pure-%j.err
-#SBATCH --time=12:00:00
+#SBATCH --time=24:00:00
 #SBATCH --account=cil_jobs
 
 set -e
@@ -42,6 +42,7 @@ cd /home/$USER/CIL-Sentiment-Analysis-YBG-Agents/baselines/26_contrastive_pure
 
 python train.py \
     --seed 42 \
+    --split_seed 42 \
     --epochs 6 \
     --patience 3 \
     --batch_size 32 \
@@ -53,12 +54,22 @@ python train.py \
     --weight_decay 0.01 \
     --temperature 0.07 \
     --projection_dim 128 \
+    --retrieval_train_per_class 1000 \
+    --checkpoint_metric knn_k7_weighted_median_score \
     --supcon_variant normal \
     --artifact_dir "$SCRATCH/artifacts/26_contrastive_pure_normal" \
     --data_dir "$SCRATCH/data"
 
+python eval_retrieval.py \
+    --artifact_dir "$SCRATCH/artifacts/26_contrastive_pure_normal" \
+    --data_dir "$SCRATCH/data" \
+    --k_values 1 7 101 \
+    --retrieval_tau 0.07 \
+    --cache_embeddings
+
 python train.py \
     --seed 42 \
+    --split_seed 42 \
     --epochs 6 \
     --patience 3 \
     --batch_size 32 \
@@ -70,9 +81,18 @@ python train.py \
     --weight_decay 0.01 \
     --temperature 0.07 \
     --projection_dim 128 \
+    --retrieval_train_per_class 1000 \
+    --checkpoint_metric knn_k7_weighted_median_score \
     --supcon_variant distance_weighted \
     --artifact_dir "$SCRATCH/artifacts/26_contrastive_pure_distance_weighted" \
     --data_dir "$SCRATCH/data"
+
+python eval_retrieval.py \
+    --artifact_dir "$SCRATCH/artifacts/26_contrastive_pure_distance_weighted" \
+    --data_dir "$SCRATCH/data" \
+    --k_values 1 7 101 \
+    --retrieval_tau 0.07 \
+    --cache_embeddings
 
 echo ""
 echo "Done. Fetch results (run locally):"
