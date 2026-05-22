@@ -32,7 +32,9 @@ ssh roliveir@student-cluster.inf.ethz.ch
 cd /home/$USER/CIL-Sentiment-Analysis-YBG-Agents
 bash scripts/setup_cluster_env.sh
 ```
-
+```bash
+source /work/scratch/$USER/cil/venv/bin/activate
+```
 The setup script creates `/work/scratch/$USER/cil/venv`, installs PyTorch, and creates the scratch folders.
 
 ## Copy Data From Windows
