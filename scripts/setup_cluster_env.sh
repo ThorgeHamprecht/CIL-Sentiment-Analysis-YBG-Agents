@@ -18,7 +18,8 @@ mkdir -p \
     "$SCRATCH/artifacts/07_transformer_custom" \
     "$SCRATCH/submissions" \
     "$SCRATCH/logs" \
-    "$SCRATCH/.cache/torch"
+    "$SCRATCH/.cache/torch" \
+    "$SCRATCH/.cache/huggingface"
 
 # ── 2. Load module system + CUDA ──────────────────────────────────────────────
 # The cluster uses modules, not conda. `. /etc/profile.d/modules.sh` is required
@@ -47,6 +48,9 @@ pip install --no-cache-dir torch torchvision torchaudio \
 echo "Installing project dependencies..."
 pip install --no-cache-dir pandas scikit-learn
 
+echo "Installing transformer dependencies..."
+pip install --no-cache-dir transformers==4.40.0 sentencepiece protobuf accelerate
+
 # ── 5. Persist env vars in ~/.bashrc ──────────────────────────────────────────
 if ! grep -q "SCRATCH_CIL" ~/.bashrc; then
     cat >> ~/.bashrc <<'EOF'
@@ -54,6 +58,7 @@ if ! grep -q "SCRATCH_CIL" ~/.bashrc; then
 # CIL project
 export SCRATCH_CIL="/work/scratch/$USER/cil"
 export TORCH_HOME="$SCRATCH_CIL/.cache/torch"
+export HF_HOME="$SCRATCH_CIL/.cache/huggingface"
 EOF
 fi
 

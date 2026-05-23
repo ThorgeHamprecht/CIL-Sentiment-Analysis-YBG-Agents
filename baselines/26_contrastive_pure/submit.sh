@@ -27,6 +27,8 @@ mkdir -p \
 
 . "$SCRATCH/venv/bin/activate"
 
+nvidia-smi
+
 python -c "
 import os
 import torch
@@ -41,8 +43,6 @@ else:
 import transformers
 print('Transformers:', transformers.__version__)
 "
-
-nvidia-smi
 
 cd /home/$USER/CIL-Sentiment-Analysis-YBG-Agents/baselines/26_contrastive_pure
 

@@ -182,7 +182,7 @@ def compute_class_medoids(z_train: torch.Tensor, y_train: torch.Tensor) -> Tuple
     z_train = F.normalize(z_train.float(), p=2, dim=-1)
     y_train = y_train.long()
     for cls in range(NUM_CLASSES):
-        idx = torch.flatnonzero(y_train == cls)
+        idx = torch.nonzero(y_train == cls, as_tuple=False).flatten()
         if idx.numel() == 0:
             continue
         cls_embeddings = z_train[idx]

@@ -204,6 +204,8 @@ def main(args):
     out_dir.mkdir(parents=True, exist_ok=True)
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print(f"Device: {device}")
+    if args.require_cuda and device.type != "cuda":
+        raise RuntimeError("CUDA is required for mDeBERTa training; refusing to run on CPU.")
 
     os.environ.setdefault("TOKENIZERS_PARALLELISM", "false")
     tokenizer = AutoTokenizer.from_pretrained(BACKBONE, use_fast=False)
@@ -358,6 +360,7 @@ if __name__ == "__main__":
     parser.add_argument("--tokenize_batch_size", type=int, default=1024)
     parser.add_argument("--no_progress", action="store_true")
     parser.add_argument("--gradient_checkpointing", action="store_true")
+    parser.add_argument("--require_cuda", action=argparse.BooleanOptionalAction, default=True)
     parser.add_argument("--data_dir",         default=str(_DEFAULT_DATA_DIR))
     parser.add_argument("--artifact_dir",     default=str(_DEFAULT_ARTIFACT_DIR))
     main(parser.parse_args())

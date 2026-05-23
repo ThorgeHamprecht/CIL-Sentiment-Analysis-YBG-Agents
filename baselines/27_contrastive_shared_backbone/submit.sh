@@ -27,13 +27,19 @@ mkdir -p \
 
 . "$SCRATCH/venv/bin/activate"
 
+nvidia-smi
+
 python -c "
+import os
 import torch
+print('CUDA_VISIBLE_DEVICES:', os.environ.get('CUDA_VISIBLE_DEVICES'))
 print('PyTorch:', torch.__version__)
 print('CUDA available:', torch.cuda.is_available())
 if torch.cuda.is_available():
     print('GPU:', torch.cuda.get_device_name(0))
     print('BF16 support:', torch.cuda.is_bf16_supported())
+else:
+    raise SystemExit('CUDA is not available in this SLURM job; refusing to train mDeBERTa on CPU.')
 import transformers
 print('Transformers:', transformers.__version__)
 "
