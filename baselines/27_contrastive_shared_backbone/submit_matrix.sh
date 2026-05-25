@@ -11,7 +11,6 @@ if [[ "${1:-}" == "--submit" ]]; then
 fi
 
 JOBS=(
-    "normal w100_s000 1.0 0.0 0"
     "normal w050_s050 0.5 0.5 0"
     "normal w070_s030 0.7 0.3 0"
     "normal w030_s070 0.3 0.7 0"
