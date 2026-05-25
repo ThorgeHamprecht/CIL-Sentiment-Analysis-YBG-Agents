@@ -5,7 +5,7 @@ BASE="/home/$USER/CIL-Sentiment-Analysis-YBG-Agents/baselines"
 
 echo "Submitting one all-combinations job for 27 and one for 28."
 echo "Each job requests an RTX 5060 Ti via --gpus=5060ti:1 and runs:"
-echo "  2 SupCon variants x 3 W1/SupCon loss splits x 2 warmup settings."
+echo "  one W1-only reference plus 2 SupCon variants x 3 W1/SupCon loss splits x 2 warmup settings."
 echo ""
 
 sbatch "$BASE/27_contrastive_shared_backbone/submit.sh"
