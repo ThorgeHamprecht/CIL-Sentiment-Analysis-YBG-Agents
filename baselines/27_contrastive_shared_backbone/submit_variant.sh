@@ -2,6 +2,7 @@
 #SBATCH --job-name=contrastive_27
 #SBATCH --output=/work/scratch/%u/cil/logs/contrastive_27-%j.out
 #SBATCH --error=/work/scratch/%u/cil/logs/contrastive_27-%j.err
+#SBATCH --gpus=5060ti:1
 #SBATCH --time=24:00:00
 #SBATCH --account=cil_jobs
 
@@ -11,13 +12,15 @@ SUPCON_VARIANT="${1:-normal}"
 WEIGHT_TAG="${2:-w050_s050}"
 W1_WEIGHT="${3:-0.5}"
 SUPCON_WEIGHT="${4:-0.5}"
+WARMUP_EPOCHS="${5:-0}"
+WARMUP_TAG="warmup${WARMUP_EPOCHS}"
 
 . /etc/profile.d/modules.sh
 module add cuda/13.0
 
 SCRATCH="/work/scratch/$USER/cil"
-ARTIFACT_DIR="$SCRATCH/artifacts/27_contrastive_shared_backbone_${SUPCON_VARIANT}_${WEIGHT_TAG}"
-SUBMISSION_PREFIX="27_shared_backbone_${SUPCON_VARIANT}_${WEIGHT_TAG}"
+ARTIFACT_DIR="$SCRATCH/artifacts/27_contrastive_shared_backbone_${SUPCON_VARIANT}_${WEIGHT_TAG}_${WARMUP_TAG}"
+SUBMISSION_PREFIX="27_shared_backbone_${SUPCON_VARIANT}_${WEIGHT_TAG}_${WARMUP_TAG}"
 
 export TORCH_HOME="$SCRATCH/.cache/torch"
 export HF_HOME="$SCRATCH/.cache/huggingface"
@@ -51,12 +54,12 @@ print('Transformers:', transformers.__version__)
 
 cd /home/$USER/CIL-Sentiment-Analysis-YBG-Agents/baselines/27_contrastive_shared_backbone
 
-echo "Running 27 shared-backbone variant=$SUPCON_VARIANT weights=$WEIGHT_TAG w1=$W1_WEIGHT supcon=$SUPCON_WEIGHT"
+echo "Running 27 shared-backbone variant=$SUPCON_VARIANT weights=$WEIGHT_TAG warmup=$WARMUP_EPOCHS w1=$W1_WEIGHT supcon=$SUPCON_WEIGHT"
 
 python train.py \
     --seed 42 \
     --epochs 6 \
-    --patience 3 \
+    --patience 6 \
     --batch_size 32 \
     --max_len 256 \
     --encoder_lr 8e-6 \
@@ -69,21 +72,31 @@ python train.py \
     --projection_dim 128 \
     --w1_loss_weight "$W1_WEIGHT" \
     --supcon_loss_weight "$SUPCON_WEIGHT" \
-    --contrastive_warmup_epochs 2 \
+    --contrastive_warmup_epochs "$WARMUP_EPOCHS" \
     --supcon_variant "$SUPCON_VARIANT" \
+    --save_epoch_checkpoints 4 6 \
     --artifact_dir "$ARTIFACT_DIR" \
     --data_dir "$SCRATCH/data"
 
-python eval_mixed.py \
-    --artifact_dir "$ARTIFACT_DIR" \
-    --data_dir "$SCRATCH/data" \
-    --output_dir "$SCRATCH/submissions" \
-    --submission_prefix "$SUBMISSION_PREFIX" \
-    --batch_size 32 \
-    --k_values 1 7 101 \
-    --retrieval_tau 0.07 \
-    --alphas 0.5 0.7 0.3 \
-    --cache_embeddings
+for checkpoint in best_model.pt epoch_004_model.pt epoch_006_model.pt; do
+    if [ -f "$ARTIFACT_DIR/$checkpoint" ]; then
+        checkpoint_tag="${checkpoint%.pt}"
+        echo "Evaluating checkpoint $checkpoint"
+        python eval_mixed.py \
+            --artifact_dir "$ARTIFACT_DIR" \
+            --checkpoint_name "$checkpoint" \
+            --data_dir "$SCRATCH/data" \
+            --output_dir "$SCRATCH/submissions" \
+            --submission_prefix "${SUBMISSION_PREFIX}_${checkpoint_tag}" \
+            --batch_size 32 \
+            --k_values 1 7 101 \
+            --retrieval_tau 0.07 \
+            --alphas 0.5 0.7 0.3 \
+            --cache_embeddings
+    else
+        echo "Skipping missing checkpoint $ARTIFACT_DIR/$checkpoint"
+    fi
+done
 
 echo ""
 echo "Done. Fetch results (run locally):"

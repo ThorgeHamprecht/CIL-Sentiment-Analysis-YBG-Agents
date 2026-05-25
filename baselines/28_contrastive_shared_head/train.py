@@ -28,6 +28,21 @@ _DEFAULT_ARTIFACT_DIR = Path(__file__).parent / "artifacts"
 BACKBONE = "microsoft/mdeberta-v3-base"
 
 
+def save_checkpoint(path: Path, model, args, epoch: int, score: float, metrics: dict) -> None:
+    """Save a model checkpoint with enough metadata for later eval."""
+    torch.save(
+        {
+            "model": model.state_dict(),
+            "args": vars(args),
+            "backbone_dir": BACKBONE,
+            "epoch": epoch,
+            "val_score": score,
+            "val_metrics": metrics,
+        },
+        path,
+    )
+
+
 def kaggle_score(preds: np.ndarray, labels: np.ndarray) -> float:
     return 1.0 - np.abs(preds - labels).mean() / 4.0
 
@@ -328,18 +343,18 @@ def main(args):
         )
         print(f"  confusion=\n{metrics['confusion']}")
 
+        if epoch in set(args.save_epoch_checkpoints):
+            epoch_path = out_dir / f"epoch_{epoch:03d}_model.pt"
+            ema.apply_shadow()
+            save_checkpoint(epoch_path, model, args, epoch, metrics["kaggle_score"], metrics)
+            ema.restore()
+            print(f"  -> Saved epoch checkpoint: {epoch_path}")
+
         if metrics["kaggle_score"] > best_score:
             best_score = metrics["kaggle_score"]
             patience_counter = 0
             ema.apply_shadow()
-            torch.save(
-                {
-                    "model": model.state_dict(),
-                    "args": vars(args),
-                    "backbone_dir": BACKBONE,
-                },
-                checkpoint_path,
-            )
+            save_checkpoint(checkpoint_path, model, args, epoch, best_score, metrics)
             ema.restore()
             print(f"  -> New best: {best_score:.4f} (saved)")
         else:
@@ -375,6 +390,7 @@ if __name__ == "__main__":
     parser.add_argument("--ema_decay",        type=float, default=0.999)
     parser.add_argument("--grad_accum_steps", type=int,   default=1)
     parser.add_argument("--tokenize_batch_size", type=int, default=1024)
+    parser.add_argument("--save_epoch_checkpoints", type=int, nargs="*", default=[4, 6])
     parser.add_argument("--no_progress", action="store_true")
     parser.add_argument("--gradient_checkpointing", action="store_true")
     parser.add_argument("--require_cuda", action=argparse.BooleanOptionalAction, default=True)

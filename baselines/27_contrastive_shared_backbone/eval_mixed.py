@@ -39,9 +39,13 @@ _DEFAULT_ARTIFACT_DIR = Path(__file__).parent / "artifacts"
 _DEFAULT_OUTPUT_DIR = _SCRATCH / "submissions" if _SCRATCH.exists() else ROOT / "submissions"
 
 
-def load_model_from_checkpoint(artifact_dir: Path, device: torch.device) -> Tuple[SharedBackboneContrastiveMDeBERTa, dict]:
+def load_model_from_checkpoint(
+    artifact_dir: Path,
+    device: torch.device,
+    checkpoint_name: str = "best_model.pt",
+) -> Tuple[SharedBackboneContrastiveMDeBERTa, dict]:
     """Recreate the shared-backbone model from best_model.pt."""
-    ckpt = torch.load(artifact_dir / "best_model.pt", map_location=device, weights_only=False)
+    ckpt = torch.load(artifact_dir / checkpoint_name, map_location=device, weights_only=False)
     ckpt_args = ckpt.get("args", {})
     model = SharedBackboneContrastiveMDeBERTa(
         model_name=str(ckpt.get("backbone_dir", BACKBONE)),
@@ -115,6 +119,7 @@ def main(args):
     analysis_dir = artifact_dir / "analysis"
     predictions_dir = artifact_dir / "predictions"
     embeddings_dir = artifact_dir / "embeddings"
+    checkpoint_tag = Path(args.checkpoint_name).stem
     analysis_dir.mkdir(parents=True, exist_ok=True)
     predictions_dir.mkdir(parents=True, exist_ok=True)
     embeddings_dir.mkdir(parents=True, exist_ok=True)
@@ -124,7 +129,7 @@ def main(args):
         raise RuntimeError("CUDA is required for full mDeBERTa mixed evaluation; refusing to run on CPU.")
     print(f"Device: {device}")
 
-    model, ckpt_args = load_model_from_checkpoint(artifact_dir, device)
+    model, ckpt_args = load_model_from_checkpoint(artifact_dir, device, args.checkpoint_name)
     max_len = args.max_len or int(ckpt_args.get("max_len", 256))
     split_seed = args.split_seed if args.split_seed is not None else int(ckpt_args.get("split_seed", ckpt_args.get("seed", 42)))
 
@@ -154,35 +159,43 @@ def main(args):
     z_test, _, test_probs = encode_mixed_outputs(model, test_loader, device)
 
     if args.cache_embeddings:
-        torch.save({"embeddings": z_train, "labels": y_train}, embeddings_dir / "train_eval.pt")
-        torch.save({"embeddings": z_val, "labels": y_val, "classifier_probs": val_probs}, embeddings_dir / "val.pt")
-        torch.save({"embeddings": z_test, "classifier_probs": test_probs}, embeddings_dir / "test.pt")
+        torch.save({"embeddings": z_train, "labels": y_train}, embeddings_dir / f"{checkpoint_tag}_train_eval.pt")
+        torch.save(
+            {"embeddings": z_val, "labels": y_val, "classifier_probs": val_probs},
+            embeddings_dir / f"{checkpoint_tag}_val.pt",
+        )
+        torch.save(
+            {"embeddings": z_test, "classifier_probs": test_probs},
+            embeddings_dir / f"{checkpoint_tag}_test.pt",
+        )
 
     val_predictions = build_all_predictions(val_probs, z_train, y_train, z_val, args, device)
     val_labels_np = y_val.numpy()
     val_metrics = evaluate_prediction_dict(val_predictions, val_labels_np)
-    write_prediction_wide_csv(predictions_dir / "val_predictions.csv", val_ids, val_predictions, labels=val_labels)
-    write_confusion_csvs(val_metrics, analysis_dir)
+    write_prediction_wide_csv(predictions_dir / f"{checkpoint_tag}_val_predictions.csv", val_ids, val_predictions, labels=val_labels)
+    write_confusion_csvs(val_metrics, analysis_dir / f"{checkpoint_tag}_confusions")
     val_disagreement_path = write_disagreement_analysis(
         val_predictions,
         analysis_dir,
         labels=val_labels_np,
-        prefix="val",
+        prefix=f"{checkpoint_tag}_val",
         metrics=val_metrics,
     )
 
     test_support_z = torch.cat([z_train, z_val], dim=0)
     test_support_y = torch.cat([y_train, y_val], dim=0)
     test_predictions = build_all_predictions(test_probs, test_support_z, test_support_y, z_test, args, device)
-    write_prediction_wide_csv(predictions_dir / "test_predictions.csv", test_ids, test_predictions)
-    test_disagreement_path = write_disagreement_analysis(test_predictions, analysis_dir, prefix="test")
+    write_prediction_wide_csv(predictions_dir / f"{checkpoint_tag}_test_predictions.csv", test_ids, test_predictions)
+    test_disagreement_path = write_disagreement_analysis(test_predictions, analysis_dir, prefix=f"{checkpoint_tag}_test")
 
-    prefix = args.submission_prefix or artifact_dir.name
+    prefix = args.submission_prefix or f"{artifact_dir.name}_{checkpoint_tag}"
     selected_methods = args.submission_methods if args.submission_methods else None
     submission_paths = write_submission_files(test_ids, test_predictions, output_dir, prefix, selected_methods)
 
     payload = {
         "artifact_dir": str(artifact_dir),
+        "checkpoint_name": args.checkpoint_name,
+        "checkpoint_tag": checkpoint_tag,
         "data_dir": str(data_dir),
         "output_dir": str(output_dir),
         "split_seed": split_seed,
@@ -199,9 +212,15 @@ def main(args):
         "test_disagreement_csv": str(test_disagreement_path),
         "submissions": [str(path) for path in submission_paths],
     }
-    save_json(analysis_dir / "mixed_eval.json", payload)
+    save_json(analysis_dir / f"mixed_eval_{checkpoint_tag}.json", payload)
 
-    print("\nTop validation methods:")
+    if "classification_median" in val_metrics:
+        cls = val_metrics["classification_median"]
+        print(
+            f"\nCheckpoint {args.checkpoint_name} classification_median: "
+            f"score={cls['score']:.4f} mae={cls['mae']:.4f} qwk={cls['qwk']:.4f}"
+        )
+    print("Top validation methods:")
     for name, values in sorted(val_metrics.items(), key=lambda item: item[1]["score"], reverse=True)[:20]:
         print(f"  {name:<70} score={values['score']:.4f} mae={values['mae']:.4f} qwk={values['qwk']:.4f}")
     print(f"\nSaved validation/test predictions under {predictions_dir}")
@@ -211,6 +230,7 @@ def main(args):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--artifact_dir", default=str(_DEFAULT_ARTIFACT_DIR))
+    parser.add_argument("--checkpoint_name", default="best_model.pt")
     parser.add_argument("--data_dir", default=str(_DEFAULT_DATA_DIR))
     parser.add_argument("--output_dir", default=str(_DEFAULT_OUTPUT_DIR))
     parser.add_argument("--submission_prefix", default=None)

@@ -2,6 +2,7 @@
 #SBATCH --job-name=contrastive_pure
 #SBATCH --output=/work/scratch/%u/cil/logs/contrastive_pure-%j.out
 #SBATCH --error=/work/scratch/%u/cil/logs/contrastive_pure-%j.err
+#SBATCH --gpus=5060ti:1
 #SBATCH --time=24:00:00
 #SBATCH --account=cil_jobs
 

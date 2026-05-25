@@ -11,19 +11,25 @@ if [[ "${1:-}" == "--submit" ]]; then
 fi
 
 JOBS=(
-    "normal w050_s050 0.5 0.5"
-    "normal w070_s030 0.7 0.3"
-    "normal w030_s070 0.3 0.7"
-    "distance_weighted w050_s050 0.5 0.5"
-    "distance_weighted w070_s030 0.7 0.3"
-    "distance_weighted w030_s070 0.3 0.7"
+    "normal w050_s050 0.5 0.5 0"
+    "normal w070_s030 0.7 0.3 0"
+    "normal w030_s070 0.3 0.7 0"
+    "distance_weighted w050_s050 0.5 0.5 0"
+    "distance_weighted w070_s030 0.7 0.3 0"
+    "distance_weighted w030_s070 0.3 0.7 0"
+    "normal w050_s050 0.5 0.5 2"
+    "normal w070_s030 0.7 0.3 2"
+    "normal w030_s070 0.3 0.7 2"
+    "distance_weighted w050_s050 0.5 0.5 2"
+    "distance_weighted w070_s030 0.7 0.3 2"
+    "distance_weighted w030_s070 0.3 0.7 2"
 )
 
 count=0
 echo "28 shared-head matrix:"
 for job in "${JOBS[@]}"; do
-    read -r variant tag w1 supcon <<< "$job"
-    cmd="sbatch $BASE/submit_variant.sh $variant $tag $w1 $supcon"
+    read -r variant tag w1 supcon warmup <<< "$job"
+    cmd="sbatch $BASE/submit_variant.sh $variant $tag $w1 $supcon $warmup"
     if [[ "$SUBMIT" -eq 1 && "$count" -lt "$LIMIT" ]]; then
         echo "+ $cmd"
         $cmd

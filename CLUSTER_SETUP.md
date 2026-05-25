@@ -128,4 +128,10 @@ sacct -j <jobid> --format=JobID,State,Elapsed,ExitCode -P
 scancel <jobid>
 ```
 
-Do not add `--gpus`, `--gres`, `--cpus-per-task`, or `--mem` to SBATCH scripts on this cluster. The course account allocates the GPU resources automatically.
+For transformer jobs that need 16GB VRAM, request the RTX 5060 Ti explicitly:
+
+```bash
+#SBATCH --gpus=5060ti:1
+```
+
+Do not add `--gres`, `--cpus-per-task`, or `--mem` to SBATCH scripts on this cluster unless the course docs change again.
