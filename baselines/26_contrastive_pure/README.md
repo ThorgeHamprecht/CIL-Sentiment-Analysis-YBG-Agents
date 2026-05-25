@@ -31,6 +31,14 @@ bash predict_pure_supcon_normal.sh
 bash predict_pure_supcon_distance_weighted.sh
 ```
 
+Two-stage frozen-probe experiment:
+
+```bash
+sbatch submit_probe.sh
+```
+
+This trains pure SupCon for 3 epochs, freezes the contrastive encoder, trains a W1 classifier on the frozen embeddings for 2 epochs, then evaluates probe-only, retrieval-only, and combo predictions.
+
 ## Notes
 - Loss: SupCon only (normal or distance-weighted negatives).
 - EMA and LLRD follow the 23_mdeberta_llrd_ema recipe.

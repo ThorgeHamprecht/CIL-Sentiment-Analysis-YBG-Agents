@@ -58,8 +58,8 @@ echo "Running 28 shared-head variant=$SUPCON_VARIANT weights=$WEIGHT_TAG warmup=
 
 python train.py \
     --seed 42 \
-    --epochs 6 \
-    --patience 6 \
+    --epochs 4 \
+    --patience 4 \
     --batch_size 32 \
     --max_len 256 \
     --encoder_lr 8e-6 \
@@ -74,11 +74,11 @@ python train.py \
     --supcon_loss_weight "$SUPCON_WEIGHT" \
     --contrastive_warmup_epochs "$WARMUP_EPOCHS" \
     --supcon_variant "$SUPCON_VARIANT" \
-    --save_epoch_checkpoints 4 6 \
+    --save_epoch_checkpoints 4 \
     --artifact_dir "$ARTIFACT_DIR" \
     --data_dir "$SCRATCH/data"
 
-for checkpoint in best_model.pt epoch_004_model.pt epoch_006_model.pt; do
+for checkpoint in best_model.pt epoch_004_model.pt; do
     if [ -f "$ARTIFACT_DIR/$checkpoint" ]; then
         checkpoint_tag="${checkpoint%.pt}"
         echo "Evaluating checkpoint $checkpoint"

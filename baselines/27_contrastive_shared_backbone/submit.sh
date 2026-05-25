@@ -12,16 +12,10 @@ BASE="/home/$USER/CIL-Sentiment-Analysis-YBG-Agents/baselines/27_contrastive_sha
 
 JOBS=(
     "normal w050_s050 0.5 0.5 0"
-    "normal w070_s030 0.7 0.3 0"
     "normal w030_s070 0.3 0.7 0"
     "distance_weighted w050_s050 0.5 0.5 0"
-    "distance_weighted w070_s030 0.7 0.3 0"
     "distance_weighted w030_s070 0.3 0.7 0"
-    "normal w050_s050 0.5 0.5 2"
-    "normal w070_s030 0.7 0.3 2"
     "normal w030_s070 0.3 0.7 2"
-    "distance_weighted w050_s050 0.5 0.5 2"
-    "distance_weighted w070_s030 0.7 0.3 2"
     "distance_weighted w030_s070 0.3 0.7 2"
 )
 
