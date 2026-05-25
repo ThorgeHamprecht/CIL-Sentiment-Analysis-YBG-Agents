@@ -36,8 +36,11 @@ print('CUDA_VISIBLE_DEVICES:', os.environ.get('CUDA_VISIBLE_DEVICES'))
 print('PyTorch:', torch.__version__)
 print('CUDA available:', torch.cuda.is_available())
 if torch.cuda.is_available():
-    print('GPU:', torch.cuda.get_device_name(0))
+    gpu_name = torch.cuda.get_device_name(0)
+    print('GPU:', gpu_name)
     print('BF16 support:', torch.cuda.is_bf16_supported())
+    if 'RTX 5060 Ti' not in gpu_name:
+        raise SystemExit(f'Need RTX 5060 Ti for this job to avoid OOM; got {gpu_name}. Resubmit later.')
 else:
     raise SystemExit('CUDA is not available in this SLURM job; refusing to train mDeBERTa on CPU.')
 import transformers
@@ -73,6 +76,15 @@ python eval_retrieval.py \
     --retrieval_tau 0.07 \
     --cache_embeddings
 
+python predict_test.py \
+    --artifact_dir "$SCRATCH/artifacts/26_contrastive_pure_normal" \
+    --data_dir "$SCRATCH/data" \
+    --output_dir "$SCRATCH/submissions" \
+    --submission_prefix "26_contrastive_pure_normal" \
+    --k_values 1 7 101 \
+    --retrieval_tau 0.07 \
+    --cache_embeddings
+
 python train.py \
     --seed 42 \
     --split_seed 42 \
@@ -100,7 +112,17 @@ python eval_retrieval.py \
     --retrieval_tau 0.07 \
     --cache_embeddings
 
+python predict_test.py \
+    --artifact_dir "$SCRATCH/artifacts/26_contrastive_pure_distance_weighted" \
+    --data_dir "$SCRATCH/data" \
+    --output_dir "$SCRATCH/submissions" \
+    --submission_prefix "26_contrastive_pure_distance_weighted" \
+    --k_values 1 7 101 \
+    --retrieval_tau 0.07 \
+    --cache_embeddings
+
 echo ""
 echo "Done. Fetch results (run locally):"
 echo "  rsync -av roliveir@student-cluster.inf.ethz.ch:$SCRATCH/artifacts/26_contrastive_pure_normal/ ./artifacts/"
 echo "  rsync -av roliveir@student-cluster.inf.ethz.ch:$SCRATCH/artifacts/26_contrastive_pure_distance_weighted/ ./artifacts/"
+echo "  rsync -av roliveir@student-cluster.inf.ethz.ch:$SCRATCH/submissions/ ./submissions/"

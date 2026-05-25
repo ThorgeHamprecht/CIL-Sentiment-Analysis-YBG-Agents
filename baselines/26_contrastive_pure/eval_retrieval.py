@@ -132,9 +132,10 @@ def knn_predict_all(
 ) -> Dict[str, np.ndarray]:
     """Predict labels with all requested kNN decoders.
 
-    For each k, this computes majority vote plus a similarity-weighted class
-    distribution over neighbors. The weighted distribution is decoded both by
-    argmax and by the ordinal median/CDF rule.
+    For each k, this computes majority vote, the true ordinal median of the
+    neighbor labels, plus a similarity-weighted class distribution. The
+    weighted distribution is decoded both by argmax and by the ordinal
+    median/CDF rule.
     """
     device = device or torch.device("cuda" if torch.cuda.is_available() else "cpu")
     z_train = F.normalize(z_train.float(), p=2, dim=-1).to(device)
@@ -145,7 +146,7 @@ def knn_predict_all(
     preds: Dict[str, List[torch.Tensor]] = {}
     for k in k_values:
         k_eff = min(k, z_train.size(0))
-        for suffix in ("majority", "weighted_argmax", "weighted_median"):
+        for suffix in ("majority", "weighted_argmax", "weighted_median", "label_median"):
             preds[f"knn_k{k_eff}_{suffix}"] = []
 
     for start in range(0, z_val.size(0), chunk_size):
@@ -162,6 +163,9 @@ def knn_predict_all(
             one_hot = F.one_hot(labels_k, num_classes=NUM_CLASSES).float()
             counts = one_hot.sum(dim=1)
             preds[f"knn_k{k_eff}_majority"].append(counts.argmax(dim=1).cpu())
+
+            label_median = labels_k.float().median(dim=1).values.long()
+            preds[f"knn_k{k_eff}_label_median"].append(label_median.cpu())
 
             weights = torch.softmax(sims_k / tau, dim=1).unsqueeze(-1)
             probs = (weights * one_hot).sum(dim=1)

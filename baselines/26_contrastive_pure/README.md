@@ -24,6 +24,13 @@ bash eval_pure_supcon_normal.sh
 bash eval_pure_supcon_distance_weighted.sh
 ```
 
+Create `test.csv` submissions after a checkpoint exists:
+
+```bash
+bash predict_pure_supcon_normal.sh
+bash predict_pure_supcon_distance_weighted.sh
+```
+
 ## Notes
 - Loss: SupCon only (normal or distance-weighted negatives).
 - EMA and LLRD follow the 23_mdeberta_llrd_ema recipe.
@@ -31,3 +38,4 @@ bash eval_pure_supcon_distance_weighted.sh
 - During training, `best_model.pt` is selected by `knn_k7_weighted_median_score` unless `--checkpoint_metric supcon_val_loss` is passed.
 - Epoch retrieval metrics are saved to `analysis/epoch_retrieval_metrics.jsonl`.
 - Full retrieval metrics are saved to `analysis/retrieval_eval.json` with confusion matrices as CSV files.
+- Test predictions are saved to `predictions/test_predictions.csv`; one Kaggle submission per retrieval method is written to `$SCRATCH/submissions`.

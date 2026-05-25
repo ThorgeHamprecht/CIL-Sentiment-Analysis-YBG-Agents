@@ -46,7 +46,7 @@ pip install --no-cache-dir torch torchvision torchaudio \
     --index-url https://download.pytorch.org/whl/cu130
 
 echo "Installing project dependencies..."
-pip install --no-cache-dir pandas scikit-learn
+pip install --no-cache-dir pandas scikit-learn matplotlib
 
 echo "Installing transformer dependencies..."
 pip install --no-cache-dir transformers==4.40.0 sentencepiece protobuf accelerate

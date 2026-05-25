@@ -88,7 +88,8 @@ def train_epoch(
     ema,
     supcon_loss_fn,
     device,
-    lambda_supcon,
+    w1_loss_weight,
+    supcon_loss_weight,
     accum_steps,
     show_progress,
     epoch,
@@ -117,7 +118,7 @@ def train_epoch(
             outputs = model(input_ids, attention_mask)
             w1 = emd_loss(outputs["logits"], labels)
             supcon = supcon_loss_fn(outputs["embeddings"], labels)
-            loss = w1 + lambda_supcon * supcon
+            loss = w1_loss_weight * w1 + supcon_loss_weight * supcon
             scaled_loss = loss / accum_steps
 
         scaled_loss.backward()
@@ -152,7 +153,7 @@ def train_epoch(
 
 
 @torch.no_grad()
-def evaluate(model, loader, supcon_loss_fn, device, lambda_supcon):
+def evaluate(model, loader, supcon_loss_fn, device, w1_loss_weight, supcon_loss_weight):
     model.eval()
     total_loss = 0.0
     total_w1 = 0.0
@@ -170,7 +171,7 @@ def evaluate(model, loader, supcon_loss_fn, device, lambda_supcon):
             outputs = model(input_ids, attention_mask)
             w1 = emd_loss(outputs["logits"], labels)
             supcon = supcon_loss_fn(outputs["embeddings"], labels)
-            loss = w1 + lambda_supcon * supcon
+            loss = w1_loss_weight * w1 + supcon_loss_weight * supcon
 
         total_loss += loss.item() * len(labels)
         total_w1 += w1.item() * len(labels)
@@ -272,6 +273,9 @@ def main(args):
         temperature=args.temperature,
         variant=args.supcon_variant,
     )
+    target_supcon_weight = args.supcon_loss_weight
+    if target_supcon_weight is None:
+        target_supcon_weight = args.lambda_supcon
 
     best_score = -float("inf")
     patience_counter = 0
@@ -279,7 +283,11 @@ def main(args):
 
     for epoch in range(1, args.epochs + 1):
         t0 = time.time()
-        lambda_supcon = get_contrastive_lambda(epoch, args.lambda_supcon, args.contrastive_warmup_epochs)
+        supcon_loss_weight = get_contrastive_lambda(
+            epoch,
+            target_supcon_weight,
+            args.contrastive_warmup_epochs,
+        )
 
         train_loss, train_w1, train_supcon = train_epoch(
             model,
@@ -289,7 +297,8 @@ def main(args):
             ema,
             supcon_loss_fn,
             device,
-            lambda_supcon,
+            args.w1_loss_weight,
+            supcon_loss_weight,
             accum_steps,
             show_progress=not args.no_progress,
             epoch=epoch,
@@ -298,13 +307,19 @@ def main(args):
 
         ema.apply_shadow()
         val_loss, val_w1, val_supcon, metrics = evaluate(
-            model, val_loader, supcon_loss_fn, device, lambda_supcon
+            model,
+            val_loader,
+            supcon_loss_fn,
+            device,
+            args.w1_loss_weight,
+            supcon_loss_weight,
         )
         ema.restore()
 
         print(
             f"Epoch {epoch:2d} | train_loss={train_loss:.4f} | val_loss={val_loss:.4f} "
-            f"| w1={val_w1:.4f} | supcon={val_supcon:.4f} | lambda={lambda_supcon:.4f} "
+            f"| w1={val_w1:.4f} | supcon={val_supcon:.4f} "
+            f"| w1_weight={args.w1_loss_weight:.3f} | supcon_weight={supcon_loss_weight:.3f} "
             f"| score={metrics['kaggle_score']:.4f} | {time.time()-t0:.1f}s"
         )
         print(
@@ -353,6 +368,8 @@ if __name__ == "__main__":
     parser.add_argument("--temperature",      type=float, default=0.07)
     parser.add_argument("--representation_dim", type=int, default=256)
     parser.add_argument("--lambda_supcon",    type=float, default=0.03)
+    parser.add_argument("--w1_loss_weight",   type=float, default=1.0)
+    parser.add_argument("--supcon_loss_weight", type=float, default=None)
     parser.add_argument("--contrastive_warmup_epochs", type=int, default=2)
     parser.add_argument("--supcon_variant",   type=str,   default="normal", choices=["normal", "distance_weighted"])
     parser.add_argument("--ema_decay",        type=float, default=0.999)
