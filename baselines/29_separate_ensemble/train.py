@@ -258,7 +258,12 @@ def evaluate_epoch_from_checkpoints(
         val_probs = torch.load(shared_val_probs_path, map_location="cpu", weights_only=False)["classifier_probs"]
     else:
         classifier = load_classifier_checkpoint(classifier_ckpt, args, device)
-        val_probs, _ = encode_classifier_probs(classifier, loaders["val"], device)
+        val_probs, _ = encode_classifier_probs(
+            classifier,
+            loaders["val"],
+            device,
+            progress_name=f"Eval classifier epoch {epoch} val probabilities",
+        )
         del classifier
         gc.collect()
         if torch.cuda.is_available():
@@ -268,8 +273,18 @@ def evaluate_epoch_from_checkpoints(
             torch.save({"classifier_probs": val_probs}, shared_val_probs_path)
 
     contrastive = load_contrastive_checkpoint(contrastive_ckpt, args, device)
-    z_support, y_support = encode_contrastive_embeddings(contrastive, loaders["support"], device)
-    z_val, y_val = encode_contrastive_embeddings(contrastive, loaders["val"], device)
+    z_support, y_support = encode_contrastive_embeddings(
+        contrastive,
+        loaders["support"],
+        device,
+        progress_name=f"Eval {variant} epoch {epoch} support embeddings",
+    )
+    z_val, y_val = encode_contrastive_embeddings(
+        contrastive,
+        loaders["val"],
+        device,
+        progress_name=f"Eval {variant} epoch {epoch} val embeddings",
+    )
     del contrastive
     gc.collect()
     if torch.cuda.is_available():

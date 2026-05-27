@@ -122,7 +122,12 @@ def classifier_probs_for_epoch(
         return cache[epoch]
 
     model = load_classifier(artifact_dir / "classifier" / f"epoch_{epoch:03d}_model.pt", device)
-    probs, _ = encode_classifier_probs(model, test_loader, device)
+    probs, _ = encode_classifier_probs(
+        model,
+        test_loader,
+        device,
+        progress_name=f"Predict classifier epoch {epoch} test probabilities",
+    )
     del model
     gc.collect()
     if torch.cuda.is_available():
@@ -150,8 +155,18 @@ def contrastive_predictions_for_epoch(
         return payload["support_embeddings"], payload["support_labels"], payload["test_embeddings"]
 
     model = load_contrastive(artifact_dir / f"contrastive_{variant}" / f"epoch_{epoch:03d}_model.pt", device)
-    support_embeddings, support_labels = encode_contrastive_embeddings(model, support_loader, device)
-    test_embeddings, _ = encode_contrastive_embeddings(model, test_loader, device)
+    support_embeddings, support_labels = encode_contrastive_embeddings(
+        model,
+        support_loader,
+        device,
+        progress_name=f"Predict {variant} epoch {epoch} full-train support embeddings",
+    )
+    test_embeddings, _ = encode_contrastive_embeddings(
+        model,
+        test_loader,
+        device,
+        progress_name=f"Predict {variant} epoch {epoch} test embeddings",
+    )
     del model
     gc.collect()
     if torch.cuda.is_available():

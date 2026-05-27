@@ -145,14 +145,31 @@ def ensemble_distributions(
     return outputs
 
 
+def _progress_marks(total_batches: int) -> set[int]:
+    """Return batch indices where a 10% progress update should be printed."""
+    if total_batches <= 0:
+        return set()
+    return {max(1, math.ceil(total_batches * step / 10)) for step in range(1, 11)}
+
+
+def _print_progress(progress_name: Optional[str], batch_idx: int, total_batches: int, marks: set[int]) -> None:
+    """Print a compact eval progress heartbeat for long mDeBERTa encoding loops."""
+    if progress_name is None or batch_idx not in marks:
+        return
+    pct = min(100, int(round(100.0 * batch_idx / max(1, total_batches))))
+    print(f"{progress_name}: {pct}% ({batch_idx}/{total_batches} batches)", flush=True)
+
+
 @torch.no_grad()
-def encode_classifier_probs(model, loader, device) -> Tuple[np.ndarray, torch.Tensor]:
+def encode_classifier_probs(model, loader, device, progress_name: Optional[str] = None) -> Tuple[np.ndarray, torch.Tensor]:
     """Encode a loader into classifier probabilities and optional labels."""
     model.eval()
     all_probs: List[np.ndarray] = []
     all_labels: List[torch.Tensor] = []
     autocast_ctx = torch.autocast(device_type="cuda", dtype=torch.bfloat16) if device.type == "cuda" else torch.no_grad()
-    for batch in loader:
+    total_batches = len(loader)
+    marks = _progress_marks(total_batches)
+    for batch_idx, batch in enumerate(loader, start=1):
         input_ids = batch["input_ids"].to(device)
         attention_mask = batch["attention_mask"].to(device)
         with autocast_ctx:
@@ -160,18 +177,21 @@ def encode_classifier_probs(model, loader, device) -> Tuple[np.ndarray, torch.Te
         all_probs.append(F.softmax(logits.float(), dim=1).cpu().numpy())
         if "labels" in batch:
             all_labels.append(batch["labels"].long().cpu())
+        _print_progress(progress_name, batch_idx, total_batches, marks)
     labels = torch.cat(all_labels, dim=0) if all_labels else torch.empty(0, dtype=torch.long)
     return np.concatenate(all_probs, axis=0), labels
 
 
 @torch.no_grad()
-def encode_contrastive_embeddings(model, loader, device) -> Tuple[torch.Tensor, torch.Tensor]:
+def encode_contrastive_embeddings(model, loader, device, progress_name: Optional[str] = None) -> Tuple[torch.Tensor, torch.Tensor]:
     """Encode a loader into normalized contrastive embeddings and labels."""
     model.eval()
     all_embeddings: List[torch.Tensor] = []
     all_labels: List[torch.Tensor] = []
     autocast_ctx = torch.autocast(device_type="cuda", dtype=torch.bfloat16) if device.type == "cuda" else torch.no_grad()
-    for batch in loader:
+    total_batches = len(loader)
+    marks = _progress_marks(total_batches)
+    for batch_idx, batch in enumerate(loader, start=1):
         input_ids = batch["input_ids"].to(device)
         attention_mask = batch["attention_mask"].to(device)
         with autocast_ctx:
@@ -179,6 +199,7 @@ def encode_contrastive_embeddings(model, loader, device) -> Tuple[torch.Tensor, 
         all_embeddings.append(outputs["embeddings"].float().cpu())
         if "labels" in batch:
             all_labels.append(batch["labels"].long().cpu())
+        _print_progress(progress_name, batch_idx, total_batches, marks)
     embeddings = F.normalize(torch.cat(all_embeddings, dim=0), p=2, dim=-1)
     labels = torch.cat(all_labels, dim=0) if all_labels else torch.empty(0, dtype=torch.long)
     return embeddings, labels

@@ -2,6 +2,7 @@
 import argparse
 import gc
 import json
+import math
 import os
 import time
 from contextlib import nullcontext
@@ -92,6 +93,21 @@ def median_decode_probs_torch(probs: torch.Tensor) -> torch.Tensor:
     """Decode probabilities with the ordinal CDF median rule."""
     cdf = torch.cumsum(probs, dim=1)
     return (cdf < 0.5).sum(dim=1).clamp(0, probs.shape[1] - 1).long()
+
+
+def _progress_marks(total_batches: int) -> set[int]:
+    """Return batch indices where a 10% progress update should be printed."""
+    if total_batches <= 0:
+        return set()
+    return {max(1, math.ceil(total_batches * step / 10)) for step in range(1, 11)}
+
+
+def _print_progress(progress_name: str | None, batch_idx: int, total_batches: int, marks: set[int]) -> None:
+    """Print a compact heartbeat for long validation and encoding loops."""
+    if progress_name is None or batch_idx not in marks:
+        return
+    pct = min(100, int(round(100.0 * batch_idx / max(1, total_batches))))
+    print(f"{progress_name}: {pct}% ({batch_idx}/{total_batches} batches)", flush=True)
 
 
 def json_default(obj):
@@ -222,7 +238,13 @@ def train_supcon_backbone(args, train_loader, support_loader, val_loader, device
         train_loss = total_loss / len(train_loader.dataset)
 
         ema.apply_shadow()
-        val_loss = evaluate_supcon_loss(model, val_loader, loss_fn, device)
+        val_loss = evaluate_supcon_loss(
+            model,
+            val_loader,
+            loss_fn,
+            device,
+            progress_name=f"SupCon epoch {epoch} val loss",
+        )
         medoid_metrics = evaluate_supcon_medoid(model, support_loader, val_loader, args.retrieval_tau, device)
         ema.restore()
         ckpt_path = artifact_dir / "supcon" / f"epoch_{epoch:03d}_model.pt"
@@ -285,11 +307,13 @@ def train_supcon_backbone(args, train_loader, support_loader, val_loader, device
 
 
 @torch.no_grad()
-def evaluate_supcon_loss(model, loader, loss_fn, device: torch.device) -> float:
+def evaluate_supcon_loss(model, loader, loss_fn, device: torch.device, progress_name: str | None = None) -> float:
     """Evaluate SupCon loss on a labeled loader."""
     model.eval()
     total_loss = 0.0
-    for batch in loader:
+    total_batches = len(loader)
+    marks = _progress_marks(total_batches)
+    for batch_idx, batch in enumerate(loader, start=1):
         input_ids = batch["input_ids"].to(device)
         attention_mask = batch["attention_mask"].to(device)
         labels = batch["labels"].to(device)
@@ -297,16 +321,24 @@ def evaluate_supcon_loss(model, loader, loss_fn, device: torch.device) -> float:
             outputs = model(input_ids, attention_mask)
             loss = loss_fn(outputs["embeddings"], labels)
         total_loss += loss.item() * len(labels)
+        _print_progress(progress_name, batch_idx, total_batches, marks)
     return total_loss / len(loader.dataset)
 
 
 @torch.no_grad()
-def encode_contrastive_embeddings(model, loader, device: torch.device) -> Tuple[torch.Tensor, torch.Tensor]:
+def encode_contrastive_embeddings(
+    model,
+    loader,
+    device: torch.device,
+    progress_name: str | None = None,
+) -> Tuple[torch.Tensor, torch.Tensor]:
     """Encode normalized SupCon embeddings and labels for retrieval validation."""
     model.eval()
     embeddings_out: List[torch.Tensor] = []
     labels_out: List[torch.Tensor] = []
-    for batch in loader:
+    total_batches = len(loader)
+    marks = _progress_marks(total_batches)
+    for batch_idx, batch in enumerate(loader, start=1):
         input_ids = batch["input_ids"].to(device)
         attention_mask = batch["attention_mask"].to(device)
         with autocast_context(device):
@@ -314,6 +346,7 @@ def encode_contrastive_embeddings(model, loader, device: torch.device) -> Tuple[
         embeddings_out.append(outputs["embeddings"].float().cpu())
         if "labels" in batch:
             labels_out.append(batch["labels"].long().cpu())
+        _print_progress(progress_name, batch_idx, total_batches, marks)
     embeddings = F.normalize(torch.cat(embeddings_out), p=2, dim=-1)
     labels = torch.cat(labels_out) if labels_out else torch.empty(0, dtype=torch.long)
     return embeddings, labels
@@ -366,19 +399,36 @@ def medoid_distribution_predictions(
 @torch.no_grad()
 def evaluate_supcon_medoid(model, support_loader, val_loader, tau: float, device: torch.device) -> Dict[str, object]:
     """Evaluate a SupCon checkpoint with medoid-distribution median decoding."""
-    z_support, y_support = encode_contrastive_embeddings(model, support_loader, device)
-    z_val, y_val = encode_contrastive_embeddings(model, val_loader, device)
+    z_support, y_support = encode_contrastive_embeddings(
+        model,
+        support_loader,
+        device,
+        progress_name="SupCon medoid eval support embeddings",
+    )
+    z_val, y_val = encode_contrastive_embeddings(
+        model,
+        val_loader,
+        device,
+        progress_name="SupCon medoid eval val embeddings",
+    )
     preds = medoid_distribution_predictions(z_support, y_support, z_val, tau, device)
     return metrics_for_predictions(preds, y_val.numpy())
 
 
 @torch.no_grad()
-def encode_pooled_features(model, loader, device: torch.device) -> Tuple[torch.Tensor, torch.Tensor]:
+def encode_pooled_features(
+    model,
+    loader,
+    device: torch.device,
+    progress_name: str | None = None,
+) -> Tuple[torch.Tensor, torch.Tensor]:
     """Encode pooled backbone features and optional labels onto CPU."""
     model.eval()
     features: List[torch.Tensor] = []
     labels_out: List[torch.Tensor] = []
-    for batch in loader:
+    total_batches = len(loader)
+    marks = _progress_marks(total_batches)
+    for batch_idx, batch in enumerate(loader, start=1):
         input_ids = batch["input_ids"].to(device)
         attention_mask = batch["attention_mask"].to(device)
         with autocast_context(device):
@@ -386,6 +436,7 @@ def encode_pooled_features(model, loader, device: torch.device) -> Tuple[torch.T
         features.append(outputs["pooled"].float().cpu())
         if "labels" in batch:
             labels_out.append(batch["labels"].long().cpu())
+        _print_progress(progress_name, batch_idx, total_batches, marks)
     labels = torch.cat(labels_out) if labels_out else torch.empty(0, dtype=torch.long)
     return torch.cat(features), labels
 
@@ -407,9 +458,24 @@ def train_frozen_coral_head(args, supcon_ckpt: Path, loaders, labels_and_ids, de
             dropout=args.contrastive_dropout,
         ).to(device)
         encoder.load_state_dict(torch.load(supcon_ckpt, map_location=device, weights_only=False)["model"])
-        train_features, train_labels = encode_pooled_features(encoder, loaders["train_eval"], device)
-        val_features, val_labels = encode_pooled_features(encoder, loaders["val"], device)
-        test_features, _ = encode_pooled_features(encoder, loaders["test"], device)
+        train_features, train_labels = encode_pooled_features(
+            encoder,
+            loaders["train_eval"],
+            device,
+            progress_name="Frozen-head feature cache train embeddings",
+        )
+        val_features, val_labels = encode_pooled_features(
+            encoder,
+            loaders["val"],
+            device,
+            progress_name="Frozen-head feature cache val embeddings",
+        )
+        test_features, _ = encode_pooled_features(
+            encoder,
+            loaders["test"],
+            device,
+            progress_name="Frozen-head feature cache test embeddings",
+        )
         feature_cache.parent.mkdir(parents=True, exist_ok=True)
         torch.save(
             {
