@@ -6,8 +6,9 @@ This experiment trains one EMD^2 mDeBERTa classifier and two pure SupCon encoder
 
 - Classifier: mDeBERTa-v3-base, EMD^2 loss, LLRD, EMA, mean pooling, multi-sample dropout with 5 samples.
 - Contrastive encoders: pure SupCon `normal` and `distance_weighted`, trained separately.
+- Training budget: 4 classifier epochs, 4 normal SupCon epochs, and 4 distance-weighted SupCon epochs.
 - Validation ensemble sweep: 4 medoid temperatures times 6 ensemble strategies for each SupCon variant.
-- Test outputs: validation-best submissions and epoch-5 submissions for every variant/tau/strategy combination.
+- Test outputs: validation-best submissions and epoch-4 submissions for every variant/tau/strategy combination.
 
 ## Main Command
 
@@ -25,9 +26,9 @@ The script requests an RTX 5060 Ti:
 
 ```text
 /work/scratch/$USER/cil/artifacts/29_separate_ensemble/
-  classifier/epoch_001_model.pt ... epoch_005_model.pt
-  contrastive_normal/epoch_001_model.pt ... epoch_005_model.pt
-  contrastive_distance_weighted/epoch_001_model.pt ... epoch_005_model.pt
+  classifier/epoch_001_model.pt ... epoch_004_model.pt
+  contrastive_normal/epoch_001_model.pt ... epoch_004_model.pt
+  contrastive_distance_weighted/epoch_001_model.pt ... epoch_004_model.pt
   analysis/epoch_ensemble_metrics.jsonl
   analysis/validation_summary.csv
   analysis/validation_best_by_combo.csv

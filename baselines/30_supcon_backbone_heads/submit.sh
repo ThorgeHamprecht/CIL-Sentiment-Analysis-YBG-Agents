@@ -1,7 +1,7 @@
 #!/bin/bash
-#SBATCH --job-name=contrastive_29
-#SBATCH --output=/work/scratch/%u/cil/logs/contrastive_29-%j.out
-#SBATCH --error=/work/scratch/%u/cil/logs/contrastive_29-%j.err
+#SBATCH --job-name=contrastive_30
+#SBATCH --output=/work/scratch/%u/cil/logs/contrastive_30-%j.out
+#SBATCH --error=/work/scratch/%u/cil/logs/contrastive_30-%j.err
 #SBATCH --gpus=5060ti:1
 #SBATCH --time=7-00:00:00
 #SBATCH --account=cil_jobs
@@ -12,7 +12,7 @@ set -e
 module add cuda/13.0
 
 SCRATCH="/work/scratch/$USER/cil"
-ARTIFACT_DIR="$SCRATCH/artifacts/29_separate_ensemble"
+ARTIFACT_DIR="$SCRATCH/artifacts/30_supcon_backbone_heads"
 
 export TORCH_HOME="$SCRATCH/.cache/torch"
 export HF_HOME="$SCRATCH/.cache/huggingface"
@@ -44,48 +44,41 @@ import transformers
 print('Transformers:', transformers.__version__)
 "
 
-cd /home/$USER/CIL-Sentiment-Analysis-YBG-Agents/baselines/29_separate_ensemble
+cd /home/$USER/CIL-Sentiment-Analysis-YBG-Agents/baselines/30_supcon_backbone_heads
 
 echo "=== Sanity checks ==="
 python sanity_check.py
 
-echo "=== Train folder 29 separate ensemble ==="
+echo "=== Train SupCon backbone and downstream heads ==="
 python train.py \
     --seed 42 \
     --split_seed 42 \
-    --epochs 4 \
+    --supcon_epochs 4 \
+    --head_epochs 3 \
     --batch_size 32 \
     --eval_batch_size 64 \
     --max_len 256 \
-    --classifier_encoder_lr 8e-6 \
-    --classifier_head_lr 5e-5 \
-    --contrastive_encoder_lr 8e-6 \
+    --encoder_lr 8e-6 \
     --contrastive_head_lr 1e-4 \
+    --regression_head_lr 5e-5 \
+    --frozen_head_lr 1e-3 \
     --layer_decay 0.9 \
     --weight_decay 0.01 \
-    --classifier_dropout 0.25 \
     --contrastive_dropout 0.1 \
-    --msd_samples 5 \
+    --regression_dropout 0.1 \
     --projection_dim 128 \
+    --mlp_hidden_dim 512 \
     --temperature 0.07 \
+    --supcon_variant normal \
+    --retrieval_train_per_class 1000 \
+    --retrieval_tau 0.07 \
     --ema_decay 0.999 \
     --warmup_fraction 0.06 \
-    --retrieval_train_per_class 1000 \
-    --retrieval_taus 0.02 0.05 0.10 0.20 \
-    --artifact_dir "$ARTIFACT_DIR" \
-    --data_dir "$SCRATCH/data"
-
-echo "=== Write validation-best and epoch-4 test submissions ==="
-python predict.py \
     --artifact_dir "$ARTIFACT_DIR" \
     --data_dir "$SCRATCH/data" \
-    --output_dir "$SCRATCH/submissions" \
-    --max_len 256 \
-    --batch_size 32 \
-    --retrieval_taus 0.02 0.05 0.10 0.20 \
-    --final_epoch 4
+    --output_dir "$SCRATCH/submissions"
 
 echo ""
 echo "Done. Fetch results (run locally):"
-echo "  rsync -av roliveir@student-cluster.inf.ethz.ch:$ARTIFACT_DIR/ ./artifacts/29_separate_ensemble/"
+echo "  rsync -av roliveir@student-cluster.inf.ethz.ch:$ARTIFACT_DIR/ ./artifacts/30_supcon_backbone_heads/"
 echo "  rsync -av roliveir@student-cluster.inf.ethz.ch:$SCRATCH/submissions/ ./submissions/"

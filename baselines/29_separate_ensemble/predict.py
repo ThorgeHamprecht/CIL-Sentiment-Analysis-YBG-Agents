@@ -295,7 +295,7 @@ if __name__ == "__main__":
     parser.add_argument("--batch_size", type=int, default=32)
     parser.add_argument("--tokenize_batch_size", type=int, default=1024)
     parser.add_argument("--retrieval_taus", type=float, nargs="+", default=list(DEFAULT_TAUS))
-    parser.add_argument("--final_epoch", type=int, default=5)
+    parser.add_argument("--final_epoch", type=int, default=4)
     parser.add_argument("--recompute", action="store_true")
     parser.add_argument("--require_cuda", action=argparse.BooleanOptionalAction, default=True)
     parser.add_argument("--no_progress", action="store_true")

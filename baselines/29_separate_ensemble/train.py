@@ -183,12 +183,13 @@ def train_contrastive_epoch(model, loader, optimizer, scheduler, ema: EMA, loss_
 
 
 @torch.no_grad()
-def evaluate_classifier(model, loader, device: torch.device) -> Dict[str, object]:
-    """Compute classifier validation loss and median-decoded metrics."""
+def evaluate_classifier(model, loader, device: torch.device, return_probs: bool = False) -> Dict[str, object]:
+    """Compute classifier validation loss, metrics, and optionally softmax probabilities."""
     model.eval()
     total_loss = 0.0
     all_preds: List[np.ndarray] = []
     all_labels: List[np.ndarray] = []
+    all_probs: List[np.ndarray] = []
     for batch in loader:
         input_ids = batch["input_ids"].to(device)
         attention_mask = batch["attention_mask"].to(device)
@@ -199,10 +200,14 @@ def evaluate_classifier(model, loader, device: torch.device) -> Dict[str, object
         total_loss += loss.item() * len(labels)
         all_preds.append(median_decode_logits(logits).cpu().numpy())
         all_labels.append(labels.cpu().numpy())
+        if return_probs:
+            all_probs.append(torch.softmax(logits.float(), dim=1).cpu().numpy())
     preds = np.concatenate(all_preds)
     labels_np = np.concatenate(all_labels)
     metrics = metrics_for_predictions(preds, labels_np)
     metrics["loss"] = total_loss / len(loader.dataset)
+    if return_probs:
+        metrics["probabilities"] = np.concatenate(all_probs, axis=0)
     return metrics
 
 
@@ -248,12 +253,19 @@ def evaluate_epoch_from_checkpoints(
     predictions_dir = artifact_dir / "predictions"
     analysis_jsonl = artifact_dir / "analysis" / "epoch_ensemble_metrics.jsonl"
 
-    classifier = load_classifier_checkpoint(classifier_ckpt, args, device)
-    val_probs, _ = encode_classifier_probs(classifier, loaders["val"], device)
-    del classifier
-    gc.collect()
-    if torch.cuda.is_available():
-        torch.cuda.empty_cache()
+    shared_val_probs_path = embeddings_dir / f"classifier_epoch_{epoch:03d}_val_probs.pt"
+    if args.cache_embeddings and shared_val_probs_path.exists():
+        val_probs = torch.load(shared_val_probs_path, map_location="cpu", weights_only=False)["classifier_probs"]
+    else:
+        classifier = load_classifier_checkpoint(classifier_ckpt, args, device)
+        val_probs, _ = encode_classifier_probs(classifier, loaders["val"], device)
+        del classifier
+        gc.collect()
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
+        if args.cache_embeddings:
+            embeddings_dir.mkdir(parents=True, exist_ok=True)
+            torch.save({"classifier_probs": val_probs}, shared_val_probs_path)
 
     contrastive = load_contrastive_checkpoint(contrastive_ckpt, args, device)
     z_support, y_support = encode_contrastive_embeddings(contrastive, loaders["support"], device)
@@ -265,10 +277,6 @@ def evaluate_epoch_from_checkpoints(
 
     if args.cache_embeddings:
         embeddings_dir.mkdir(parents=True, exist_ok=True)
-        torch.save(
-            {"classifier_probs": val_probs},
-            embeddings_dir / f"{variant}_epoch_{epoch:03d}_val_classifier_probs.pt",
-        )
         torch.save(
             {"embeddings": z_support, "labels": y_support},
             embeddings_dir / f"{variant}_epoch_{epoch:03d}_support_embeddings.pt",
@@ -500,7 +508,15 @@ def main(args):
             device,
         )
         classifier_ema.apply_shadow()
-        class_metrics = evaluate_classifier(classifier, val_loader, device)
+        class_metrics = evaluate_classifier(classifier, val_loader, device, return_probs=True)
+        class_val_probs = class_metrics.pop("probabilities")
+        if args.cache_embeddings:
+            embeddings_dir = artifact_dir / "embeddings"
+            embeddings_dir.mkdir(parents=True, exist_ok=True)
+            torch.save(
+                {"classifier_probs": class_val_probs},
+                embeddings_dir / f"classifier_epoch_{epoch:03d}_val_probs.pt",
+            )
         classifier_ema.restore()
         class_ckpt = artifact_dir / "classifier" / f"epoch_{epoch:03d}_model.pt"
         save_ema_checkpoint(
@@ -626,7 +642,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--split_seed", type=int, default=42)
-    parser.add_argument("--epochs", type=int, default=5)
+    parser.add_argument("--epochs", type=int, default=4)
     parser.add_argument("--max_len", type=int, default=256)
     parser.add_argument("--batch_size", type=int, default=32)
     parser.add_argument("--eval_batch_size", type=int, default=64)
