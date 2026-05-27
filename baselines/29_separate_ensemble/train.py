@@ -138,11 +138,36 @@ def autocast_context(device: torch.device):
     return nullcontext()
 
 
-def train_classifier_epoch(model, loader, optimizer, scheduler, ema: EMA, device: torch.device) -> float:
+def _progress_marks(total_batches: int) -> set[int]:
+    """Return batch indices where a 10% progress update should be printed."""
+    if total_batches <= 0:
+        return set()
+    return {max(1, math.ceil(total_batches * step / 10)) for step in range(1, 11)}
+
+
+def _print_progress(progress_name: str | None, batch_idx: int, total_batches: int, marks: set[int]) -> None:
+    """Print a compact progress heartbeat for long train/eval loops."""
+    if progress_name is None or batch_idx not in marks:
+        return
+    pct = min(100, int(round(100.0 * batch_idx / max(1, total_batches))))
+    print(f"{progress_name}: {pct}% ({batch_idx}/{total_batches} batches)", flush=True)
+
+
+def train_classifier_epoch(
+    model,
+    loader,
+    optimizer,
+    scheduler,
+    ema: EMA,
+    device: torch.device,
+    progress_name: str | None = None,
+) -> float:
     """Train the EMD^2 classifier for one epoch."""
     model.train()
     total_loss = 0.0
-    for batch in loader:
+    total_batches = len(loader)
+    marks = _progress_marks(total_batches)
+    for batch_idx, batch in enumerate(loader, start=1):
         input_ids = batch["input_ids"].to(device)
         attention_mask = batch["attention_mask"].to(device)
         labels = batch["labels"].to(device)
@@ -157,14 +182,26 @@ def train_classifier_epoch(model, loader, optimizer, scheduler, ema: EMA, device
         scheduler.step()
         ema.update()
         total_loss += loss.item() * len(labels)
+        _print_progress(progress_name, batch_idx, total_batches, marks)
     return total_loss / len(loader.dataset)
 
 
-def train_contrastive_epoch(model, loader, optimizer, scheduler, ema: EMA, loss_fn, device: torch.device) -> float:
+def train_contrastive_epoch(
+    model,
+    loader,
+    optimizer,
+    scheduler,
+    ema: EMA,
+    loss_fn,
+    device: torch.device,
+    progress_name: str | None = None,
+) -> float:
     """Train one pure SupCon encoder for one epoch."""
     model.train()
     total_loss = 0.0
-    for batch in loader:
+    total_batches = len(loader)
+    marks = _progress_marks(total_batches)
+    for batch_idx, batch in enumerate(loader, start=1):
         input_ids = batch["input_ids"].to(device)
         attention_mask = batch["attention_mask"].to(device)
         labels = batch["labels"].to(device)
@@ -179,18 +216,27 @@ def train_contrastive_epoch(model, loader, optimizer, scheduler, ema: EMA, loss_
         scheduler.step()
         ema.update()
         total_loss += loss.item() * len(labels)
+        _print_progress(progress_name, batch_idx, total_batches, marks)
     return total_loss / len(loader.dataset)
 
 
 @torch.no_grad()
-def evaluate_classifier(model, loader, device: torch.device, return_probs: bool = False) -> Dict[str, object]:
+def evaluate_classifier(
+    model,
+    loader,
+    device: torch.device,
+    return_probs: bool = False,
+    progress_name: str | None = None,
+) -> Dict[str, object]:
     """Compute classifier validation loss, metrics, and optionally softmax probabilities."""
     model.eval()
     total_loss = 0.0
     all_preds: List[np.ndarray] = []
     all_labels: List[np.ndarray] = []
     all_probs: List[np.ndarray] = []
-    for batch in loader:
+    total_batches = len(loader)
+    marks = _progress_marks(total_batches)
+    for batch_idx, batch in enumerate(loader, start=1):
         input_ids = batch["input_ids"].to(device)
         attention_mask = batch["attention_mask"].to(device)
         labels = batch["labels"].to(device)
@@ -202,6 +248,7 @@ def evaluate_classifier(model, loader, device: torch.device, return_probs: bool 
         all_labels.append(labels.cpu().numpy())
         if return_probs:
             all_probs.append(torch.softmax(logits.float(), dim=1).cpu().numpy())
+        _print_progress(progress_name, batch_idx, total_batches, marks)
     preds = np.concatenate(all_preds)
     labels_np = np.concatenate(all_labels)
     metrics = metrics_for_predictions(preds, labels_np)
@@ -521,9 +568,16 @@ def main(args):
             classifier_scheduler,
             classifier_ema,
             device,
+            progress_name=f"Train classifier epoch {epoch}",
         )
         classifier_ema.apply_shadow()
-        class_metrics = evaluate_classifier(classifier, val_loader, device, return_probs=True)
+        class_metrics = evaluate_classifier(
+            classifier,
+            val_loader,
+            device,
+            return_probs=True,
+            progress_name=f"Eval classifier epoch {epoch}",
+        )
         class_val_probs = class_metrics.pop("probabilities")
         if args.cache_embeddings:
             embeddings_dir = artifact_dir / "embeddings"
@@ -554,6 +608,7 @@ def main(args):
             normal_state["ema"],
             normal_state["loss_fn"],
             device,
+            progress_name=f"Train {normal_variant} SupCon epoch {epoch}",
         )
         contrastive_ckpt = artifact_dir / f"contrastive_{normal_variant}" / f"epoch_{epoch:03d}_model.pt"
         save_ema_checkpoint(
@@ -606,6 +661,7 @@ def main(args):
                 state["ema"],
                 state["loss_fn"],
                 device,
+                progress_name=f"Train {variant} SupCon epoch {epoch}",
             )
             contrastive_ckpt = artifact_dir / f"contrastive_{variant}" / f"epoch_{epoch:03d}_model.pt"
             save_ema_checkpoint(
@@ -660,7 +716,7 @@ if __name__ == "__main__":
     parser.add_argument("--epochs", type=int, default=4)
     parser.add_argument("--max_len", type=int, default=256)
     parser.add_argument("--batch_size", type=int, default=32)
-    parser.add_argument("--eval_batch_size", type=int, default=64)
+    parser.add_argument("--eval_batch_size", type=int, default=32)
     parser.add_argument("--tokenize_batch_size", type=int, default=1024)
     parser.add_argument("--classifier_encoder_lr", type=float, default=8e-6)
     parser.add_argument("--classifier_head_lr", type=float, default=5e-5)

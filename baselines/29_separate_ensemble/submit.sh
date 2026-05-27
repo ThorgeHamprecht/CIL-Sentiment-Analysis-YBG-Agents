@@ -55,7 +55,7 @@ python train.py \
     --split_seed 42 \
     --epochs 4 \
     --batch_size 32 \
-    --eval_batch_size 64 \
+    --eval_batch_size 32 \
     --max_len 256 \
     --classifier_encoder_lr 8e-6 \
     --classifier_head_lr 5e-5 \
