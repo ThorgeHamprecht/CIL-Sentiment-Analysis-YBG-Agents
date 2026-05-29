@@ -34,7 +34,7 @@ if torch.cuda.is_available():
 "
 
 # ── Train ─────────────────────────────────────────────────────────────────────
-cd /home/thamprecht/cil/project/baselines/08_rnn_improved
+cd /home/$USER/CIL-Sentiment-Analysis-YBG-Agents/baselines/08_rnn_improved
 
 python train.py \
     --epochs          30 \
@@ -59,5 +59,5 @@ python predict.py \
     --output_dir  "$SCRATCH/submissions"
 
 echo ""
-echo "Done. Fetch results (run on your Mac):"
-echo "  rsync -av thamprecht@student-cluster.inf.ethz.ch:$SCRATCH/submissions/ ./submissions/"
+echo "Done. Fetch results (run locally):"
+echo "  rsync -av <user>@student-cluster.inf.ethz.ch:$SCRATCH/submissions/ <local_folder>/submissions/"

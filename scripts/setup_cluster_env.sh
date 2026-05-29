@@ -2,8 +2,8 @@
 # Run ONCE on the ETH student cluster LOGIN NODE (not as a SLURM job).
 #
 # Usage:
-#   ssh thamprecht@student-cluster.inf.ethz.ch
-#   cd /home/$USER/cil/project
+#   ssh <user>@student-cluster.inf.ethz.ch
+#   cd /home/$USER/CIL-Sentiment-Analysis-YBG-Agents
 #   bash scripts/setup_cluster_env.sh
 
 set -e
@@ -18,7 +18,8 @@ mkdir -p \
     "$SCRATCH/artifacts/07_transformer_custom" \
     "$SCRATCH/submissions" \
     "$SCRATCH/logs" \
-    "$SCRATCH/.cache/torch"
+    "$SCRATCH/.cache/torch" \
+    "$SCRATCH/.cache/huggingface"
 
 # ── 2. Load module system + CUDA ──────────────────────────────────────────────
 # The cluster uses modules, not conda. `. /etc/profile.d/modules.sh` is required
@@ -45,7 +46,10 @@ pip install --no-cache-dir torch torchvision torchaudio \
     --index-url https://download.pytorch.org/whl/cu130
 
 echo "Installing project dependencies..."
-pip install --no-cache-dir pandas scikit-learn
+pip install --no-cache-dir pandas scikit-learn matplotlib
+
+echo "Installing transformer dependencies..."
+pip install --no-cache-dir transformers==4.40.0 sentencepiece protobuf accelerate
 
 # ── 5. Persist env vars in ~/.bashrc ──────────────────────────────────────────
 if ! grep -q "SCRATCH_CIL" ~/.bashrc; then
@@ -54,6 +58,7 @@ if ! grep -q "SCRATCH_CIL" ~/.bashrc; then
 # CIL project
 export SCRATCH_CIL="/work/scratch/$USER/cil"
 export TORCH_HOME="$SCRATCH_CIL/.cache/torch"
+export HF_HOME="$SCRATCH_CIL/.cache/huggingface"
 EOF
 fi
 
@@ -67,6 +72,6 @@ echo "Venv:  $VENV"
 echo "CUDA shows False on login node (no GPU) — normal."
 python -c "import torch; print('PyTorch:', torch.__version__)"
 echo ""
-echo "Next — copy Kaggle data to scratch (run on your Mac):"
-echo "  rsync -av /path/to/train.csv /path/to/test.csv /path/to/test_solved.csv \\"
-echo "    thamprecht@student-cluster.inf.ethz.ch:$SCRATCH/data/"
+echo "Next — copy Kaggle data to scratch (run locally):"
+echo "  rsync -av /path/to/data/ \\"
+echo "    <user>@student-cluster.inf.ethz.ch:$SCRATCH/data/"

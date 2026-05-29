@@ -20,7 +20,7 @@ mkdir -p \
 
 . "$SCRATCH/venv/bin/activate"
 
-cd /home/thamprecht/cil/project/baselines/24_bilstm_emd_ensemble
+cd /home/$USER/CIL-Sentiment-Analysis-YBG-Agents/baselines/24_bilstm_emd_ensemble
 
 echo "=== Fine-tune (3 seeds) ==="
 python train.py \
@@ -40,5 +40,5 @@ python predict.py \
     --output_dir   "$SCRATCH/submissions"
 
 echo ""
-echo "Done. Fetch results (run on your Mac):"
-echo "  rsync -av thamprecht@student-cluster.inf.ethz.ch:$SCRATCH/submissions/ ./submissions/"
+echo "Done. Fetch results (run locally):"
+echo "  rsync -av <user>@student-cluster.inf.ethz.ch:$SCRATCH/submissions/ <local_folder>/submissions/"

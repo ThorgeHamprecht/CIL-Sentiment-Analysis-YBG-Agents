@@ -132,11 +132,11 @@ src/                          # reusable Python modules
 ## ETH Student Cluster — Complete Guide
 
 ### Access
-- **SSH**: `ssh thamprecht@student-cluster.inf.ethz.ch`
+- **SSH**: `ssh <user>@student-cluster.inf.ethz.ch`
 - **Login nodes**: `student-cluster1.inf.ethz.ch`, `student-cluster2.inf.ethz.ch`
 - Login banner shows remaining GPU budget and home quota — check it each session.
 
-### Compute budget (thamprecht)
+### Compute budget (<user>)
 | Account tag | Hours | Max runtime/job |
 |-------------|-------|-----------------|
 | `cil`       | 100h  | 60 min          |
@@ -154,20 +154,20 @@ Use `cil_jobs` for training runs. Use `cil` only for quick interactive tests.
 ### Storage
 | Path | Quota | Retention | Use for |
 |------|-------|-----------|---------|
-| `/home/thamprecht/` | 20 GB | Permanent (deleted at course end) | Code only |
-| `/work/scratch/thamprecht/` | 100 GB | Age-based (see below) | Venv, data, artifacts |
+| `/home/$USER/` | 20 GB | Permanent (deleted at course end) | Code only |
+| `/work/scratch/$USER/` | 100 GB | Age-based (see below) | Venv, data, artifacts |
 
 **Scratch retention** (cleaning runs at 23:00 daily — do NOT touch mtimes):
 - Used < 10 GB → max 7 days
 - Used 10–50 GB → max 2 days
 - Used > 50 GB → max 1 day
 
-**Rule**: always rsync submission CSVs back to your Mac immediately after a job finishes.
+**Rule**: always rsync submission CSVs back locally immediately after a job finishes.
 
 ### Directory layout on cluster
 ```
-/home/thamprecht/cil/project/          ← rsync of repo (code only, permanent)
-/work/scratch/thamprecht/cil/
+/home/$USER/CIL-Sentiment-Analysis-YBG-Agents/          ← rsync of repo (code only, permanent)
+/work/scratch/$USER/cil/
   venv/                                ← Python venv with PyTorch (~4 GB)
   data/                                ← train.csv, test.csv
   artifacts/
@@ -190,7 +190,7 @@ Do NOT add `--gpus`, `--gres`, `--cpus-per-task`, or `--mem` — all give "Speci
 
 **Always hardcode the baseline directory — never use `dirname $0`:**
 ```bash
-cd /home/thamprecht/cil/project/baselines/20_mdeberta_emd_v2
+cd /home/$USER/CIL-Sentiment-Analysis-YBG-Agents/baselines/20_mdeberta_emd_v2
 ```
 SLURM copies scripts to its spool directory (`/var/spool/slurm/d/jobXXX/`), so `dirname $0` resolves there, causing `python: can't open file 'train.py': No such file or directory`.
 
@@ -199,9 +199,9 @@ SLURM copies scripts to its spool directory (`/var/spool/slurm/d/jobXXX/`), so `
 ### Pre-downloading HuggingFace model weights (REQUIRED)
 All submit scripts set `TRANSFORMERS_OFFLINE=1`. Weights must be pre-downloaded on the login node before submitting:
 ```bash
-ssh thamprecht@student-cluster.inf.ethz.ch
-source /work/scratch/thamprecht/cil/venv/bin/activate
-export HF_HOME=/work/scratch/thamprecht/cil/.cache/huggingface
+ssh <user>@student-cluster.inf.ethz.ch
+source /work/scratch/$USER/cil/venv/bin/activate
+export HF_HOME=/work/scratch/$USER/cil/.cache/huggingface
 
 # For mDeBERTa-base (baselines 19, 20):
 python -c "
@@ -219,33 +219,33 @@ AutoModel.from_pretrained('microsoft/mdeberta-v3-large')
 ```
 If the HF cache is cleared by scratch retention, re-download on the login node before re-submitting.
 
-### Syncing code to cluster (run on Mac)
+### Syncing code to cluster (run locally)
 ```bash
 rsync -av --exclude='__pycache__' --exclude='*.pyc' --exclude='artifacts/' \
-  "/Users/thorge/Documents/ETH/MS Semester 2/CIL/CIL Sentiment Analysis/" \
-  thamprecht@student-cluster.inf.ethz.ch:/home/thamprecht/cil/project/
+  "<local_folder>/" \
+  <user>@student-cluster.inf.ethz.ch:/home/$USER/CIL-Sentiment-Analysis-YBG-Agents/
 ```
 
 ### Submitting jobs
 ```bash
 # Use absolute paths — relative paths break in SLURM spool
-sbatch /home/thamprecht/cil/project/baselines/20_mdeberta_emd_v2/submit.sh
-sbatch /home/thamprecht/cil/project/baselines/21_mdeberta_large_emd/submit.sh
+sbatch /home/$USER/CIL-Sentiment-Analysis-YBG-Agents/baselines/20_mdeberta_emd_v2/submit.sh
+sbatch /home/$USER/CIL-Sentiment-Analysis-YBG-Agents/baselines/21_mdeberta_large_emd/submit.sh
 ```
 
 ### Monitoring
 ```bash
 squeue -u $USER -o '%i %j %T %M %l %R'              # queue status
-tail -f /work/scratch/thamprecht/cil/logs/<name>-<id>.out  # live log
+tail -f /work/scratch/$USER/cil/logs/<name>-<id>.out  # live log
 sacct -j <id> --format=JobID,State,Elapsed,ExitCode -P     # finished job
 scancel <id>                                               # cancel job
 ```
 
-### Fetching results (run on Mac after job finishes)
+### Fetching results (run locally after job finishes)
 ```bash
 rsync -av \
-  thamprecht@student-cluster.inf.ethz.ch:/work/scratch/thamprecht/cil/submissions/ \
-  "/Users/thorge/Documents/ETH/MS Semester 2/CIL/CIL Sentiment Analysis/submissions/"
+  <user>@student-cluster.inf.ethz.ch:/work/scratch/$USER/cil/submissions/ \
+  "<local_folder>/submissions/"
 ```
 
 ### Environment setup (module system, no conda)
@@ -257,7 +257,7 @@ source /work/scratch/$USER/cil/venv/bin/activate
 
 ### Known issues and fixes
 - **`--gpus` and `--gres` rejected**: do not use — GPU is auto-allocated by account.
-- **`train.py not found`**: use hardcoded `cd /home/thamprecht/...` in submit scripts, never `dirname $0`.
+- **`train.py not found`**: use hardcoded `cd /home/$USER/...` in submit scripts, never `dirname $0`.
 - **`module` not found in job**: source `. /etc/profile.d/modules.sh` first.
 - **pip cache filling home**: always use `--no-cache-dir`.
 - **Venv gone after scratch cleaning**: re-run `bash scripts/setup_cluster_env.sh`.

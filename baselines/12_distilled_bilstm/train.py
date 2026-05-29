@@ -7,6 +7,7 @@ Loss per batch:
 SWA is applied over the last swa_epochs epochs to smooth the final checkpoint.
 """
 import argparse
+import os
 import math
 import time
 from pathlib import Path
@@ -210,5 +211,5 @@ if __name__ == "__main__":
     parser.add_argument("--swa_epochs",    type=int,   default=5)
     parser.add_argument("--data_dir",      default=str(_DEFAULT_DATA_DIR))
     parser.add_argument("--artifact_dir",  default=str(_DEFAULT_ARTIFACT_DIR))
-    parser.add_argument("--soft_dir",      default="/work/scratch/thamprecht/cil/artifacts/11_xlmr_lora")
+    parser.add_argument("--soft_dir",      default=str(Path("/work/scratch") / os.environ.get("USER", "<user>") / "cil" / "artifacts" / "11_xlmr_lora"))
     main(parser.parse_args())

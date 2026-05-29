@@ -26,4 +26,4 @@ EOF
 
 echo ""
 echo "=== All done. You can now submit the job: ==="
-echo "  sbatch /home/$USER/cil/project/baselines/09_mdeberta_coral/submit.sh"
+echo "  sbatch /home/$USER/CIL-Sentiment-Analysis-YBG-Agents/baselines/09_mdeberta_coral/submit.sh"

@@ -31,7 +31,7 @@ print('CUDA:', torch.cuda.is_available())
 if torch.cuda.is_available(): print('GPU:', torch.cuda.get_device_name(0))
 "
 
-cd /home/thamprecht/cil/project/baselines/25_mdeberta_frozen
+cd /home/$USER/CIL-Sentiment-Analysis-YBG-Agents/baselines/25_mdeberta_frozen
 
 echo "=== Fine-tune (3 seeds, frozen encoder) ==="
 python train.py \
@@ -59,5 +59,5 @@ python eval_ensemble.py \
 
 echo ""
 echo "Done. Fetch results:"
-echo "  rsync -av thamprecht@student-cluster.inf.ethz.ch:$SCRATCH/submissions/ ./submissions/"
-echo "  rsync -av thamprecht@student-cluster.inf.ethz.ch:$SCRATCH/artifacts/25_mdeberta_frozen/analysis/ ./baselines/25_mdeberta_frozen/analysis/"
+echo "  rsync -av <user>@student-cluster.inf.ethz.ch:$SCRATCH/submissions/ <local_folder>/submissions/"
+echo "  rsync -av <user>@student-cluster.inf.ethz.ch:$SCRATCH/artifacts/25_mdeberta_frozen/analysis/ <local_folder>/baselines/25_mdeberta_frozen/analysis/"

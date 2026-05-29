@@ -12,10 +12,10 @@ set -e
 module add cuda/13.0
 
 # ── Storage layout ────────────────────────────────────────────────────────────
-# Code (permanent, small):   /home/$USER/cil/project/
+# Code (permanent, small):   /home/$USER/CIL-Sentiment-Analysis-YBG-Agents/
 # Venv (~4 GB, recreatable): /work/scratch/$USER/cil/venv/
 # Data (re-downloadable):    /work/scratch/$USER/cil/data/
-# Artifacts + submissions:   /work/scratch/$USER/cil/  ← rsync to Mac after job
+# Artifacts + submissions:   /work/scratch/$USER/cil/  ← rsync locally after job
 SCRATCH="/work/scratch/$USER/cil"
 export TORCH_HOME="$SCRATCH/.cache/torch"
 
@@ -38,7 +38,7 @@ if torch.cuda.is_available():
 "
 
 # ── Train ─────────────────────────────────────────────────────────────────────
-BASELINE_DIR="/home/thamprecht/cil/project/baselines/06_rnn_bilstm"
+BASELINE_DIR="/home/$USER/CIL-Sentiment-Analysis-YBG-Agents/baselines/06_rnn_bilstm"
 cd "$BASELINE_DIR"
 
 python train.py \
@@ -59,5 +59,5 @@ python predict.py \
     --output_dir  "$SCRATCH/submissions"
 
 echo ""
-echo "Done. Fetch results (run on your Mac):"
-echo "  rsync -av thamprecht@student-cluster.inf.ethz.ch:$SCRATCH/submissions/ ./submissions/"
+echo "Done. Fetch results (run locally):"
+echo "  rsync -av <user>@student-cluster.inf.ethz.ch:$SCRATCH/submissions/ <local_folder>/submissions/"

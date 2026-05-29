@@ -12,6 +12,7 @@ Outputs:
 Run once before submitting the training job (or let submit.sh call it).
 """
 import argparse
+import os
 import gzip
 import json
 import re
@@ -125,5 +126,5 @@ if __name__ == "__main__":
     parser.add_argument("--max_vocab",    type=int, default=50_000)
     parser.add_argument("--data_dir",     default=str(ROOT / "data"))
     parser.add_argument("--artifact_dir", default=str(Path(__file__).parent / "artifacts"))
-    parser.add_argument("--fasttext_dir", default="/work/scratch/thamprecht/cil/fasttext")
+    parser.add_argument("--fasttext_dir", default=str(Path("/work/scratch") / os.environ.get("USER", "<user>") / "cil" / "fasttext"))
     main(parser.parse_args())

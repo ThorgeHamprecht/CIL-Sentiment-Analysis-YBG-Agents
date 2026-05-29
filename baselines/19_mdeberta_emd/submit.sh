@@ -39,7 +39,7 @@ print('Transformers:', transformers.__version__)
 "
 
 # ── Train ─────────────────────────────────────────────────────────────────────
-cd /home/thamprecht/cil/project/baselines/19_mdeberta_emd
+cd /home/$USER/CIL-Sentiment-Analysis-YBG-Agents/baselines/19_mdeberta_emd
 
 python train.py \
     --epochs      10  \
@@ -60,5 +60,5 @@ python predict.py \
     --output_dir  "$SCRATCH/submissions"
 
 echo ""
-echo "Done. Fetch results (run on your Mac):"
-echo "  rsync -av thamprecht@student-cluster.inf.ethz.ch:$SCRATCH/submissions/ ./submissions/"
+echo "Done. Fetch results (run locally):"
+echo "  rsync -av <user>@student-cluster.inf.ethz.ch:$SCRATCH/submissions/ <local_folder>/submissions/"
