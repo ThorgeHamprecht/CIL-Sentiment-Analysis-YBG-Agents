@@ -1,7 +1,8 @@
 # CIL 2026 — Ordinal Sentiment Classification
 
 Reproduction instructions for all submission predictions.
-All training runs on the **ETH D-INFK student cluster** (NVIDIA RTX 5060 Ti, 16 GB VRAM).
+Neural baselines (B06–B30) run on the **ETH D-INFK student cluster** (NVIDIA RTX 5060 Ti, 16 GB VRAM).
+Linear baselines (B01, B02) are CPU-only and can be run locally or on the cluster.
 
 ---
 
@@ -59,8 +60,17 @@ rsync -av thamprecht@student-cluster.inf.ethz.ch:/work/scratch/thamprecht/cil/su
 
 ## 5. Baselines
 
+**B01 and B02 can also be run locally** (no GPU, scikit-learn only):
+```bash
+pip install scikit-learn pandas numpy scipy
+python baselines/01_linear/linear.py --data-dir /path/to/data
+python baselines/02_svm_nwn/svm_nwn.py --data-dir /path/to/data
+```
+
 | ID | Directory | Test score |
 |---|---|---|
+| B01 | `baselines/01_linear/` | 0.8828 |
+| B02 | `baselines/02_svm_nwn/` | 0.8604 |
 | B06 | `baselines/06_rnn_bilstm/` | 0.8876 |
 | B07 | `baselines/07_transformer_custom/` | 0.8733 |
 | B15 | `baselines/15_bilstm_emd/` | 0.8913 |
@@ -78,4 +88,4 @@ rsync -av thamprecht@student-cluster.inf.ethz.ch:/work/scratch/thamprecht/cil/su
 | B29 | `baselines/29_bilstm_oll/` | 0.8900 |
 | B30 | `baselines/30_transformer_oll/` | 0.8750 |
 
-**B27 is the final submission** (~15 h runtime, 3 seeds).
+**B27 is the final submission** (~12 h runtime, 3 seeds).
