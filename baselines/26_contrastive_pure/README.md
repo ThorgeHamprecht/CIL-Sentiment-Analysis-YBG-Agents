@@ -1,49 +1,20 @@
-# 26 Contrastive Pure (mDeBERTa-v3-base)
+# 26 Contrastive Pure
 
-Pure supervised contrastive learning with mean pooling and a projection head. Labels are 0-4 internally. Validation includes SupCon loss plus retrieval metrics from kNN and class medoids.
+Pure supervised contrastive learning with an mDeBERTa-v3-base encoder, mean
+pooling, and a projection head. The final supported experiment trains both
+standard SupCon and distance-weighted SupCon, then evaluates kNN and class-medoid
+retrieval decoders.
 
-## Quick commands
+See `HOW_TO_RUN.md` for the cluster command, expected data layout, and output
+locations.
 
-Sanity checks:
+## Experiment Summary
 
-```bash
-python sanity_check.py
-```
+- Backbone: `microsoft/mdeberta-v3-base`.
+- Head: `768 -> 512 -> 128` projection head with LayerNorm, GELU, dropout, and
+  L2-normalized output.
+- Losses: standard SupCon and distance-weighted SupCon.
+- Training: 6 epochs per variant, batch size 32, max length 256, LLRD, EMA.
+- Inference: kNN with `k in {1, 7, 101}` and medoid-distribution decoding.
 
-Run variants:
-
-```bash
-bash run_pure_supcon_normal.sh
-bash run_pure_supcon_distance_weighted.sh
-```
-
-Full retrieval evaluation after a checkpoint exists:
-
-```bash
-bash eval_pure_supcon_normal.sh
-bash eval_pure_supcon_distance_weighted.sh
-```
-
-Create `test.csv` submissions after a checkpoint exists:
-
-```bash
-bash predict_pure_supcon_normal.sh
-bash predict_pure_supcon_distance_weighted.sh
-```
-
-Two-stage frozen-probe experiment:
-
-```bash
-sbatch submit_probe.sh
-```
-
-This trains pure SupCon for 3 epochs, freezes the contrastive encoder, trains a W1 classifier on the frozen embeddings for 2 epochs, then evaluates probe-only, retrieval-only, and combo predictions.
-
-## Notes
-- Loss: SupCon only (normal or distance-weighted negatives).
-- EMA and LLRD follow the 23_mdeberta_llrd_ema recipe.
-- Default backbone: microsoft/mdeberta-v3-base.
-- During training, `best_model.pt` is selected by `knn_k7_weighted_median_score` unless `--checkpoint_metric supcon_val_loss` is passed.
-- Epoch retrieval metrics are saved to `analysis/epoch_retrieval_metrics.jsonl`.
-- Full retrieval metrics are saved to `analysis/retrieval_eval.json` with confusion matrices as CSV files.
-- Test predictions are saved to `predictions/test_predictions.csv`; one Kaggle submission per retrieval method is written to `$SCRATCH/submissions`.
+Representative validation results are reported in `../../contrastive_appendix.tex`.

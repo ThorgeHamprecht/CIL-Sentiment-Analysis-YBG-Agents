@@ -2,7 +2,7 @@
 # Run ONCE on the ETH student cluster LOGIN NODE (not as a SLURM job).
 #
 # Usage:
-#   ssh roliveir@student-cluster.inf.ethz.ch
+#   ssh <user>@student-cluster.inf.ethz.ch
 #   cd /home/$USER/CIL-Sentiment-Analysis-YBG-Agents
 #   bash scripts/setup_cluster_env.sh
 
@@ -74,4 +74,4 @@ python -c "import torch; print('PyTorch:', torch.__version__)"
 echo ""
 echo "Next — copy Kaggle data to scratch (run locally):"
 echo "  rsync -av /path/to/data/ \\"
-echo "    roliveir@student-cluster.inf.ethz.ch:$SCRATCH/data/"
+echo "    <user>@student-cluster.inf.ethz.ch:$SCRATCH/data/"

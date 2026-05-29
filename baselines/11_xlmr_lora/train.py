@@ -18,7 +18,7 @@ ROOT = Path(__file__).resolve().parents[2]
 _DEFAULT_DATA_DIR = ROOT / "data"
 _DEFAULT_ARTIFACT_DIR = Path(__file__).parent / "artifacts"
 MODEL_NAME = "xlm-roberta-base"
-SCRATCH = Path("/work/scratch") / os.environ.get("USER", "roliveir") / "cil"
+SCRATCH = Path("/work/scratch") / os.environ.get("USER", "<user>") / "cil"
 
 
 def kaggle_score(preds, labels):

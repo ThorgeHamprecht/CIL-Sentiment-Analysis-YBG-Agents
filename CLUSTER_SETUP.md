@@ -1,6 +1,6 @@
 # Cluster Setup
 
-This repo is configured for the ETH student cluster account `roliveir`. On the cluster, `$USER` should expand to `roliveir`, so cluster-side commands use `$USER` for paths.
+This repo is configured for an ETH student cluster account. Replace `<user>` with your cluster username. On the cluster, `$USER` should expand to that username, so cluster-side commands use `$USER` for paths.
 
 ## Paths
 
@@ -28,7 +28,7 @@ Scratch can be cleaned by age, so copy important submissions and analysis files 
 ## First Setup On The Cluster
 
 ```bash
-ssh roliveir@student-cluster.inf.ethz.ch
+ssh <user>@student-cluster.inf.ethz.ch
 cd /home/$USER/CIL-Sentiment-Analysis-YBG-Agents
 bash scripts/setup_cluster_env.sh
 ```
@@ -42,21 +42,21 @@ The setup script creates `/work/scratch/$USER/cil/venv`, installs PyTorch, and c
 Local data folder:
 
 ```text
-C:\Users\olive\OneDrive\Dokumente\MASTER\CIL\data
+<local_folder>\data
 ```
 
 From PowerShell:
 
 ```powershell
-$clusterUser = "roliveir"
-scp -r "$env:USERPROFILE\OneDrive\Dokumente\MASTER\CIL\data\*" ${clusterUser}@student-cluster.inf.ethz.ch:/work/scratch/${clusterUser}/cil/data/
+$clusterUser = "<user>"
+scp -r "<local_folder>\data\*" ${clusterUser}@student-cluster.inf.ethz.ch:/work/scratch/${clusterUser}/cil/data/
 ```
 
 If using Git Bash or WSL with `rsync`:
 
 ```bash
-CLUSTER_USER=roliveir
-rsync -av /c/Users/olive/OneDrive/Dokumente/MASTER/CIL/data/ \
+CLUSTER_USER=<user>
+rsync -av <local_folder>/data/ \
   ${CLUSTER_USER}@student-cluster.inf.ethz.ch:/work/scratch/${CLUSTER_USER}/cil/data/
 ```
 
@@ -111,27 +111,3 @@ Monitor:
 squeue -u $USER -o '%i %j %T %M %l %R'
 tail -f /work/scratch/$USER/cil/logs/bilstm-<jobid>.out
 ```
-
-Fetch submissions locally:
-
-```bash
-CLUSTER_USER=roliveir
-rsync -av ${CLUSTER_USER}@student-cluster.inf.ethz.ch:/work/scratch/${CLUSTER_USER}/cil/submissions/ ./submissions/
-```
-
-## Useful Commands
-
-```bash
-space
-squeue -u $USER -o '%i %j %T %M %l %R'
-sacct -j <jobid> --format=JobID,State,Elapsed,ExitCode -P
-scancel <jobid>
-```
-
-For transformer jobs that need 16GB VRAM, request the RTX 5060 Ti explicitly:
-
-```bash
-#SBATCH --gpus=5060ti:1
-```
-
-Do not add `--gres`, `--cpus-per-task`, or `--mem` to SBATCH scripts on this cluster unless the course docs change again.

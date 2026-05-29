@@ -6,7 +6,7 @@
 #SBATCH --time=24:00:00
 #SBATCH --account=cil_jobs
 
-set -e
+set -euo pipefail
 
 . /etc/profile.d/modules.sh
 module add cuda/13.0
@@ -50,6 +50,7 @@ print('Transformers:', transformers.__version__)
 
 cd /home/$USER/CIL-Sentiment-Analysis-YBG-Agents/baselines/26_contrastive_pure
 
+echo "=== Train/evaluate/predict standard SupCon ==="
 python train.py \
     --seed 42 \
     --split_seed 42 \
@@ -86,6 +87,7 @@ python predict_test.py \
     --retrieval_tau 0.07 \
     --cache_embeddings
 
+echo "=== Train/evaluate/predict distance-weighted SupCon ==="
 python train.py \
     --seed 42 \
     --split_seed 42 \
@@ -124,6 +126,6 @@ python predict_test.py \
 
 echo ""
 echo "Done. Fetch results (run locally):"
-echo "  rsync -av roliveir@student-cluster.inf.ethz.ch:$SCRATCH/artifacts/26_contrastive_pure_normal/ ./artifacts/"
-echo "  rsync -av roliveir@student-cluster.inf.ethz.ch:$SCRATCH/artifacts/26_contrastive_pure_distance_weighted/ ./artifacts/"
-echo "  rsync -av roliveir@student-cluster.inf.ethz.ch:$SCRATCH/submissions/ ./submissions/"
+echo "  rsync -av <user>@student-cluster.inf.ethz.ch:$SCRATCH/artifacts/26_contrastive_pure_normal/ <local_folder>/artifacts/26_contrastive_pure_normal/"
+echo "  rsync -av <user>@student-cluster.inf.ethz.ch:$SCRATCH/artifacts/26_contrastive_pure_distance_weighted/ <local_folder>/artifacts/26_contrastive_pure_distance_weighted/"
+echo "  rsync -av <user>@student-cluster.inf.ethz.ch:$SCRATCH/submissions/ <local_folder>/submissions/"

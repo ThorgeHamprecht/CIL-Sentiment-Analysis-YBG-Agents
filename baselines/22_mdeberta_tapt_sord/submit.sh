@@ -65,4 +65,4 @@ python predict.py \
 
 echo ""
 echo "Done. Fetch results (run locally):"
-echo "  rsync -av roliveir@student-cluster.inf.ethz.ch:$SCRATCH/submissions/ ./submissions/"
+echo "  rsync -av <user>@student-cluster.inf.ethz.ch:$SCRATCH/submissions/ <local_folder>/submissions/"

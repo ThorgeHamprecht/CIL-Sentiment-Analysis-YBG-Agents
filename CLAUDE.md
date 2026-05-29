@@ -132,11 +132,11 @@ src/                          # reusable Python modules
 ## ETH Student Cluster — Complete Guide
 
 ### Access
-- **SSH**: `ssh roliveir@student-cluster.inf.ethz.ch`
+- **SSH**: `ssh <user>@student-cluster.inf.ethz.ch`
 - **Login nodes**: `student-cluster1.inf.ethz.ch`, `student-cluster2.inf.ethz.ch`
 - Login banner shows remaining GPU budget and home quota — check it each session.
 
-### Compute budget (roliveir)
+### Compute budget (<user>)
 | Account tag | Hours | Max runtime/job |
 |-------------|-------|-----------------|
 | `cil`       | 100h  | 60 min          |
@@ -199,7 +199,7 @@ SLURM copies scripts to its spool directory (`/var/spool/slurm/d/jobXXX/`), so `
 ### Pre-downloading HuggingFace model weights (REQUIRED)
 All submit scripts set `TRANSFORMERS_OFFLINE=1`. Weights must be pre-downloaded on the login node before submitting:
 ```bash
-ssh roliveir@student-cluster.inf.ethz.ch
+ssh <user>@student-cluster.inf.ethz.ch
 source /work/scratch/$USER/cil/venv/bin/activate
 export HF_HOME=/work/scratch/$USER/cil/.cache/huggingface
 
@@ -222,8 +222,8 @@ If the HF cache is cleared by scratch retention, re-download on the login node b
 ### Syncing code to cluster (run locally)
 ```bash
 rsync -av --exclude='__pycache__' --exclude='*.pyc' --exclude='artifacts/' \
-  "/Users/thorge/Documents/ETH/MS Semester 2/CIL/CIL Sentiment Analysis/" \
-  roliveir@student-cluster.inf.ethz.ch:/home/$USER/CIL-Sentiment-Analysis-YBG-Agents/
+  "<local_folder>/" \
+  <user>@student-cluster.inf.ethz.ch:/home/$USER/CIL-Sentiment-Analysis-YBG-Agents/
 ```
 
 ### Submitting jobs
@@ -244,8 +244,8 @@ scancel <id>                                               # cancel job
 ### Fetching results (run locally after job finishes)
 ```bash
 rsync -av \
-  roliveir@student-cluster.inf.ethz.ch:/work/scratch/$USER/cil/submissions/ \
-  "/Users/thorge/Documents/ETH/MS Semester 2/CIL/CIL Sentiment Analysis/submissions/"
+  <user>@student-cluster.inf.ethz.ch:/work/scratch/$USER/cil/submissions/ \
+  "<local_folder>/submissions/"
 ```
 
 ### Environment setup (module system, no conda)

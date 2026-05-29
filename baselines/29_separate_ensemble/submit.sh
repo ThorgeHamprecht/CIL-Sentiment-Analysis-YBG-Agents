@@ -6,7 +6,7 @@
 #SBATCH --time=7-00:00:00
 #SBATCH --account=cil_jobs
 
-set -e
+set -euo pipefail
 
 . /etc/profile.d/modules.sh
 module add cuda/13.0
@@ -46,9 +46,6 @@ print('Transformers:', transformers.__version__)
 
 cd /home/$USER/CIL-Sentiment-Analysis-YBG-Agents/baselines/29_separate_ensemble
 
-echo "=== Sanity checks ==="
-python sanity_check.py
-
 echo "=== Train folder 29 separate ensemble ==="
 python train.py \
     --seed 42 \
@@ -87,5 +84,5 @@ python predict.py \
 
 echo ""
 echo "Done. Fetch results (run locally):"
-echo "  rsync -av roliveir@student-cluster.inf.ethz.ch:$ARTIFACT_DIR/ ./artifacts/29_separate_ensemble/"
-echo "  rsync -av roliveir@student-cluster.inf.ethz.ch:$SCRATCH/submissions/ ./submissions/"
+echo "  rsync -av <user>@student-cluster.inf.ethz.ch:$ARTIFACT_DIR/ <local_folder>/artifacts/29_separate_ensemble/"
+echo "  rsync -av <user>@student-cluster.inf.ethz.ch:$SCRATCH/submissions/ <local_folder>/submissions/"

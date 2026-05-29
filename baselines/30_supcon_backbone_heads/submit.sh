@@ -6,7 +6,7 @@
 #SBATCH --time=7-00:00:00
 #SBATCH --account=cil_jobs
 
-set -e
+set -euo pipefail
 
 . /etc/profile.d/modules.sh
 module add cuda/13.0
@@ -46,9 +46,6 @@ print('Transformers:', transformers.__version__)
 
 cd /home/$USER/CIL-Sentiment-Analysis-YBG-Agents/baselines/30_supcon_backbone_heads
 
-echo "=== Sanity checks ==="
-python sanity_check.py
-
 echo "=== Train SupCon backbone and downstream heads ==="
 python train.py \
     --seed 42 \
@@ -80,5 +77,5 @@ python train.py \
 
 echo ""
 echo "Done. Fetch results (run locally):"
-echo "  rsync -av roliveir@student-cluster.inf.ethz.ch:$ARTIFACT_DIR/ ./artifacts/30_supcon_backbone_heads/"
-echo "  rsync -av roliveir@student-cluster.inf.ethz.ch:$SCRATCH/submissions/ ./submissions/"
+echo "  rsync -av <user>@student-cluster.inf.ethz.ch:$ARTIFACT_DIR/ <local_folder>/artifacts/30_supcon_backbone_heads/"
+echo "  rsync -av <user>@student-cluster.inf.ethz.ch:$SCRATCH/submissions/ <local_folder>/submissions/"

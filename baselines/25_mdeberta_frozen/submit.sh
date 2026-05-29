@@ -59,5 +59,5 @@ python eval_ensemble.py \
 
 echo ""
 echo "Done. Fetch results:"
-echo "  rsync -av roliveir@student-cluster.inf.ethz.ch:$SCRATCH/submissions/ ./submissions/"
-echo "  rsync -av roliveir@student-cluster.inf.ethz.ch:$SCRATCH/artifacts/25_mdeberta_frozen/analysis/ ./baselines/25_mdeberta_frozen/analysis/"
+echo "  rsync -av <user>@student-cluster.inf.ethz.ch:$SCRATCH/submissions/ <local_folder>/submissions/"
+echo "  rsync -av <user>@student-cluster.inf.ethz.ch:$SCRATCH/artifacts/25_mdeberta_frozen/analysis/ <local_folder>/baselines/25_mdeberta_frozen/analysis/"
